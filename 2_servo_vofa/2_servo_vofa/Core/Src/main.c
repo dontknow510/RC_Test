@@ -34,6 +34,13 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define SERVO_MIN_ANGLE_DEG      0.0f
+#define SERVO_MAX_ANGLE_DEG      180.0f
+#define SERVO_MIN_PULSE_US       500.0f
+#define SERVO_MAX_PULSE_US       2500.0f
+#define SERVO_PWM_PERIOD_US      20000.0f
+#define VOFA_CHANNEL_COUNT       2U
+#define UART_COMMAND_BUFFER_SIZE 16U
 
 /* USER CODE END PD */
 
@@ -45,12 +52,24 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+static float current_angle = 90.0f;
+static uint8_t uart_rx_byte = 0U;
+static char uart_command_buffer[UART_COMMAND_BUFFER_SIZE] = {0};
+static uint8_t uart_command_index = 0U;
 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
+static float Servo_LimitAngle(float angle);
+static uint16_t Servo_AngleToPulse(float angle);
+static void Servo_SetAngle(float angle);
+static float Servo_GetDuty(float angle);
+static void VOFA_SendFloat(float angle, float duty);
+static void UART_CommandProcessByte(uint8_t byte);
+static void UART_CommandProcessLine(const char *line);
+static uint8_t UART_CommandParseAngle(const char *line, float *angle);
 
 /* USER CODE END PFP */
 
@@ -91,6 +110,9 @@ int main(void)
   MX_TIM1_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
+  Servo_SetAngle(current_angle);
+  HAL_UART_Receive_IT(&huart1, &uart_rx_byte, 1);
 
   /* USER CODE END 2 */
 
@@ -101,6 +123,8 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    VOFA_SendFloat(current_angle, Servo_GetDuty(current_angle));
+    HAL_Delay(20);
   }
   /* USER CODE END 3 */
 }
@@ -145,6 +169,132 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+static float Servo_LimitAngle(float angle)
+{
+  if (angle < SERVO_MIN_ANGLE_DEG)
+  {
+    return SERVO_MIN_ANGLE_DEG;
+  }
+  if (angle > SERVO_MAX_ANGLE_DEG)
+  {
+    return SERVO_MAX_ANGLE_DEG;
+  }
+  return angle;
+}
+
+static uint16_t Servo_AngleToPulse(float angle)
+{
+  const float limited_angle = Servo_LimitAngle(angle);
+  const float pulse_range = SERVO_MAX_PULSE_US - SERVO_MIN_PULSE_US;
+  const float angle_range = SERVO_MAX_ANGLE_DEG - SERVO_MIN_ANGLE_DEG;
+  const float pulse = SERVO_MIN_PULSE_US + limited_angle * pulse_range / angle_range;
+
+  return (uint16_t)(pulse + 0.5f);
+}
+
+static void Servo_SetAngle(float angle)
+{
+  current_angle = Servo_LimitAngle(angle);
+  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, Servo_AngleToPulse(current_angle));
+}
+
+static float Servo_GetDuty(float angle)
+{
+  return (float)Servo_AngleToPulse(angle) * 100.0f / SERVO_PWM_PERIOD_US;
+}
+
+static void VOFA_SendFloat(float angle, float duty)
+{
+  float data[VOFA_CHANNEL_COUNT] = {angle, duty};
+  uint8_t tail[4] = {0x00, 0x00, 0x80, 0x7F};
+
+  HAL_UART_Transmit(&huart1, (uint8_t *)data, sizeof(data), 100);
+  HAL_UART_Transmit(&huart1, tail, sizeof(tail), 100);
+}
+
+static void UART_CommandProcessByte(uint8_t byte)
+{
+  if (byte == '\r')
+  {
+    return;
+  }
+
+  if (byte == '\n')
+  {
+    uart_command_buffer[uart_command_index] = '\0';
+    UART_CommandProcessLine(uart_command_buffer);
+    uart_command_index = 0U;
+    return;
+  }
+
+  if (uart_command_index < (UART_COMMAND_BUFFER_SIZE - 1U))
+  {
+    uart_command_buffer[uart_command_index] = (char)byte;
+    uart_command_index++;
+  }
+  else
+  {
+    uart_command_index = 0U;
+  }
+}
+
+static void UART_CommandProcessLine(const char *line)
+{
+  float angle = 0.0f;
+
+  if (UART_CommandParseAngle(line, &angle) != 0U)
+  {
+    Servo_SetAngle(angle);
+  }
+}
+
+static uint8_t UART_CommandParseAngle(const char *line, float *angle)
+{
+  float value = 0.0f;
+  float decimal = 0.1f;
+  uint8_t has_digit = 0U;
+
+  while ((*line != '\0') && ((*line < '0') || (*line > '9')) && (*line != '.'))
+  {
+    line++;
+  }
+
+  while ((*line >= '0') && (*line <= '9'))
+  {
+    value = value * 10.0f + (float)(*line - '0');
+    has_digit = 1U;
+    line++;
+  }
+
+  if (*line == '.')
+  {
+    line++;
+    while ((*line >= '0') && (*line <= '9'))
+    {
+      value += (float)(*line - '0') * decimal;
+      decimal *= 0.1f;
+      has_digit = 1U;
+      line++;
+    }
+  }
+
+  if (has_digit == 0U)
+  {
+    return 0U;
+  }
+
+  *angle = value;
+  return 1U;
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+  if (huart->Instance == USART1)
+  {
+    UART_CommandProcessByte(uart_rx_byte);
+    HAL_UART_Receive_IT(&huart1, &uart_rx_byte, 1);
+  }
+}
 
 /* USER CODE END 4 */
 
