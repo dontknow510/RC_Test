@@ -19,6 +19,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "can.h"
+#include "usart.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -28,11 +29,31 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+typedef enum
+{
+  BUTTON_STATE_RELEASED = 0,
+  BUTTON_STATE_DEBOUNCE_PRESS,
+  BUTTON_STATE_PRESSED,
+  BUTTON_STATE_DEBOUNCE_RELEASE
+} ButtonState_t;
+
+typedef enum
+{
+  BUTTON_EVENT_NONE = 0,
+  BUTTON_EVENT_PRESSED
+} ButtonEvent_t;
 
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define BUTTON_GPIO_PORT    GPIOB
+#define BUTTON_GPIO_PIN     GPIO_PIN_11
+#define BUTTON_DEBOUNCE_MS  20U
+#define CAN_MASTER_TX_ID    0x101U
+#define CAN_SLAVE_TX_ID     0x102U
+#define CAN_MASTER_DATA     0x11U
+#define CAN_SLAVE_DATA      0x22U
 
 /* USER CODE END PD */
 
@@ -44,17 +65,76 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+static ButtonState_t button_state = BUTTON_STATE_RELEASED;
+static uint32_t button_state_tick = 0U;
+static CAN_Message_t can_rx_message = {0};
+static const uint8_t can_rx_text[] = "CAN RX: 0x22\r\n";
 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
+static ButtonEvent_t Button_Update(void);
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+static ButtonEvent_t Button_Update(void)
+{
+  const uint32_t now = HAL_GetTick();
+  const uint8_t is_pressed =
+      (HAL_GPIO_ReadPin(BUTTON_GPIO_PORT, BUTTON_GPIO_PIN) == GPIO_PIN_SET);
+
+  switch (button_state)
+  {
+    case BUTTON_STATE_RELEASED:
+      if (is_pressed != 0U)
+      {
+        button_state = BUTTON_STATE_DEBOUNCE_PRESS;
+        button_state_tick = now;
+      }
+      break;
+
+    case BUTTON_STATE_DEBOUNCE_PRESS:
+      if (is_pressed == 0U)
+      {
+        button_state = BUTTON_STATE_RELEASED;
+      }
+      else if ((now - button_state_tick) >= BUTTON_DEBOUNCE_MS)
+      {
+        button_state = BUTTON_STATE_PRESSED;
+        return BUTTON_EVENT_PRESSED;
+      }
+      break;
+
+    case BUTTON_STATE_PRESSED:
+      if (is_pressed == 0U)
+      {
+        button_state = BUTTON_STATE_DEBOUNCE_RELEASE;
+        button_state_tick = now;
+      }
+      break;
+
+    case BUTTON_STATE_DEBOUNCE_RELEASE:
+      if (is_pressed != 0U)
+      {
+        button_state = BUTTON_STATE_PRESSED;
+      }
+      else if ((now - button_state_tick) >= BUTTON_DEBOUNCE_MS)
+      {
+        button_state = BUTTON_STATE_RELEASED;
+      }
+      break;
+
+    default:
+      button_state = BUTTON_STATE_RELEASED;
+      break;
+  }
+
+  return BUTTON_EVENT_NONE;
+}
 
 /* USER CODE END 0 */
 
@@ -88,7 +168,12 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_CAN_Init();
+  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
+  if (CAN_AppInit() != HAL_OK)
+  {
+    Error_Handler();
+  }
 
   /* USER CODE END 2 */
 
@@ -99,6 +184,26 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    if (Button_Update() == BUTTON_EVENT_PRESSED)
+    {
+      const uint8_t tx_data = CAN_MASTER_DATA;
+
+      if (CAN_SendMessage(CAN_MASTER_TX_ID, &tx_data, 1U) == HAL_OK)
+      {
+        HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+      }
+    }
+
+    while (CAN_TryReadMessage(&can_rx_message) != 0U)
+    {
+      if ((can_rx_message.std_id == CAN_SLAVE_TX_ID) &&
+          (can_rx_message.length >= 1U) &&
+          (can_rx_message.data[0] == CAN_SLAVE_DATA))
+      {
+        (void)HAL_UART_Transmit(&huart1, (uint8_t *)can_rx_text,
+                               sizeof(can_rx_text) - 1U, 100U);
+      }
+    }
   }
   /* USER CODE END 3 */
 }
