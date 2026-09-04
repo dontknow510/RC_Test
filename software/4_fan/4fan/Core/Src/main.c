@@ -23,6 +23,8 @@
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
+#include "OLED.h"
+#include "key.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -48,11 +50,30 @@
 
 /* USER CODE BEGIN PV */
 
+typedef enum
+{
+  UI_PAGE_MENU = 0,
+  UI_PAGE_SPEED_TEST,
+  UI_PAGE_POSITION_TEST
+} UiPage;
+
+static UiPage uiPage = UI_PAGE_MENU;
+static uint8_t uiMenuIndex = 0U;
+static uint8_t uiNeedsRender = 1U;
+
+static char uiSpeedMode[] = "\xE5\xAE\x9A\xE9\x80\x9F\xE6\xA8\xA1\xE5\xBC\x8F";
+static char uiPositionMode[] = "\xE5\xAE\x9A\xE4\xBD\x8D\xE6\xA8\xA1\xE5\xBC\x8F";
+static char uiCursor[] = ">";
+static char uiTestText[] = "TEST";
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
+
+static void UI_Render(void);
+static void UI_HandleKeyEvents(void);
 
 /* USER CODE END PFP */
 
@@ -96,6 +117,10 @@ int main(void)
   MX_ADC1_Init();
   MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
+  OLED_Init();
+  KEY_Init();
+  UI_Render();
+  uiNeedsRender = 0U;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -104,6 +129,16 @@ int main(void)
   {
     /* USER CODE END WHILE */
     /* USER CODE BEGIN 3 */
+    KEY_Scan();
+    UI_HandleKeyEvents();
+
+    if (uiNeedsRender)
+    {
+      UI_Render();
+      uiNeedsRender = 0U;
+    }
+
+    HAL_Delay(5U);
   }
   /* USER CODE END 3 */
 }
@@ -155,6 +190,79 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+static void UI_Render(void)
+{
+  OLED_NewFrame();
+
+  if (uiPage == UI_PAGE_MENU)
+  {
+    OLED_PrintString(24U, 0U, uiSpeedMode, &font16x16,
+                     OLED_COLOR_NORMAL);
+    OLED_PrintString(24U, 24U, uiPositionMode, &font16x16,
+                     OLED_COLOR_NORMAL);
+
+    if (uiMenuIndex == 0U)
+    {
+      OLED_PrintASCIIString(0U, 0U, uiCursor, &afont16x8,
+                            OLED_COLOR_NORMAL);
+    }
+    else
+    {
+      OLED_PrintASCIIString(0U, 24U, uiCursor, &afont16x8,
+                            OLED_COLOR_NORMAL);
+    }
+  }
+  else if (uiPage == UI_PAGE_SPEED_TEST)
+  {
+    OLED_PrintString(32U, 0U, uiSpeedMode, &font16x16,
+                     OLED_COLOR_NORMAL);
+    OLED_PrintASCIIString(48U, 32U, uiTestText, &afont16x8,
+                          OLED_COLOR_NORMAL);
+  }
+  else
+  {
+    OLED_PrintString(32U, 0U, uiPositionMode, &font16x16,
+                     OLED_COLOR_NORMAL);
+    OLED_PrintASCIIString(48U, 32U, uiTestText, &afont16x8,
+                          OLED_COLOR_NORMAL);
+  }
+
+  OLED_ShowFrame();
+}
+
+static void UI_HandleKeyEvents(void)
+{
+  KeyEvent key1Event = KEY_GetEvent(KEY_ID_1);
+  KeyEvent key2Event = KEY_GetEvent(KEY_ID_2);
+  KeyEvent key3Event = KEY_GetEvent(KEY_ID_3);
+  KeyEvent key4Event = KEY_GetEvent(KEY_ID_4);
+
+  if (uiPage == UI_PAGE_MENU)
+  {
+    if (key1Event == KEY_EVENT_PRESSED)
+    {
+      uiMenuIndex = (uiMenuIndex == 0U) ? 1U : 0U;
+      uiNeedsRender = 1U;
+    }
+    else if (key2Event == KEY_EVENT_PRESSED)
+    {
+      uiMenuIndex = (uiMenuIndex == 0U) ? 1U : 0U;
+      uiNeedsRender = 1U;
+    }
+    else if (key3Event == KEY_EVENT_PRESSED)
+    {
+      uiPage = (uiMenuIndex == 0U) ? UI_PAGE_SPEED_TEST
+                                   : UI_PAGE_POSITION_TEST;
+      uiNeedsRender = 1U;
+    }
+  }
+  else if (key4Event == KEY_EVENT_PRESSED)
+  {
+    uiPage = UI_PAGE_MENU;
+    uiNeedsRender = 1U;
+  }
+}
 
 /* USER CODE END 4 */
 
