@@ -146,9 +146,13 @@ void Menu_Render(void)
     OLED_PrintASCIIString(0U, 0U, line, &afont12x6, OLED_COLOR_NORMAL);
     (void)snprintf(line, sizeof(line), "RPM:%4ld", (long)speed.rpm);
     OLED_PrintASCIIString(0U, 16U, line, &afont12x6, OLED_COLOR_NORMAL);
-    (void)snprintf(line, sizeof(line), "Kp:%.2f", (double)speed.kp);
+    (void)snprintf(line, sizeof(line), "Kp:%u.%02u",
+                   (unsigned int)(speed.kp100 / 100U),
+                   (unsigned int)(speed.kp100 % 100U));
     OLED_PrintASCIIString(0U, 32U, line, &afont12x6, OLED_COLOR_NORMAL);
-    (void)snprintf(line, sizeof(line), "Ki:%.2f", (double)speed.ki);
+    (void)snprintf(line, sizeof(line), "Ki:%u.%02u",
+                   (unsigned int)(speed.ki100 / 100U),
+                   (unsigned int)(speed.ki100 % 100U));
     OLED_PrintASCIIString(0U, 48U, line, &afont12x6, OLED_COLOR_NORMAL);
   }
   else if (menuPage == MENU_PAGE_POSITION)

@@ -26,8 +26,8 @@ typedef struct
   int32_t rpm;
   uint8_t pwmEnabled;
   uint8_t pwmDuty;
-  float kp;
-  float ki;
+  uint16_t kp100;
+  uint16_t ki100;
 } MotorSpeedData;
 
 void Motor_Init(TIM_HandleTypeDef *pwmTimer,

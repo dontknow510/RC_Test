@@ -298,7 +298,7 @@ void Motor_GetSpeedData(MotorSpeedData *data)
   data->rpm = speedRpm;
   data->pwmEnabled = speedPwmEnabled;
   data->pwmDuty = speedPwmDuty;
-  data->kp = MOTOR_PI_KP;
-  data->ki = MOTOR_PI_KI;
+  data->kp100 = (uint16_t)(MOTOR_PI_KP * 100.0f + 0.5f);
+  data->ki100 = (uint16_t)(MOTOR_PI_KI * 100.0f + 0.5f);
   __enable_irq();
 }
