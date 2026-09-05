@@ -44,6 +44,8 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/App/menu.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/App/motor.c
     # BSP drivers
     ${CMAKE_CURRENT_SOURCE_DIR}/BSP/OLED/OLED.c
     ${CMAKE_CURRENT_SOURCE_DIR}/BSP/OLED/font.c
@@ -53,6 +55,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/App
     ${CMAKE_CURRENT_SOURCE_DIR}/BSP/OLED
     ${CMAKE_CURRENT_SOURCE_DIR}/BSP/MPU6050
     ${CMAKE_CURRENT_SOURCE_DIR}/BSP
