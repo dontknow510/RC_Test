@@ -3,10 +3,11 @@
 
 #define MOTOR_ENCODER_CPR             1456L
 #define MOTOR_MAX_TARGET_RPM          300U
-#define MOTOR_PI_KP                   0.10f
-#define MOTOR_PI_KI                   0.03f
+#define MOTOR_PI_KP                   2.2f
+#define MOTOR_PI_KI                   1.3f
 #define MOTOR_PI_INTEGRAL_LIMIT       1000.0f
 #define MOTOR_MIN_PWM                 10U
+#define MOTOR_ADC_AVERAGE_SAMPLES     16U
 
 static TIM_HandleTypeDef *motorPwmTimer;
 static TIM_HandleTypeDef *motorEncoderTimer;
@@ -31,6 +32,8 @@ static volatile uint16_t speedTargetRpm;
 static volatile uint8_t speedPwmEnabled;
 static volatile uint8_t speedPwmDuty;
 static volatile float speedIntegral;
+static volatile float speedKp = MOTOR_PI_KP;
+static volatile float speedKi = MOTOR_PI_KI;
 static uint32_t adcLastUpdateTick;
 
 static void Motor_ResetEncoderState(void)
@@ -57,18 +60,24 @@ static void Motor_SetForwardDirection(void)
 
 static uint16_t Motor_ReadAdc(void)
 {
-  uint16_t value = 0U;
+  uint32_t sum = 0U;
+  uint8_t validSamples = 0U;
+  uint8_t sample;
 
-  if (HAL_ADC_Start(motorAdc) == HAL_OK)
+  for (sample = 0U; sample < MOTOR_ADC_AVERAGE_SAMPLES; sample++)
   {
-    if (HAL_ADC_PollForConversion(motorAdc, 10U) == HAL_OK)
+    if (HAL_ADC_Start(motorAdc) == HAL_OK)
     {
-      value = (uint16_t)HAL_ADC_GetValue(motorAdc);
+      if (HAL_ADC_PollForConversion(motorAdc, 10U) == HAL_OK)
+      {
+        sum += (uint32_t)HAL_ADC_GetValue(motorAdc);
+        validSamples++;
+      }
+      (void)HAL_ADC_Stop(motorAdc);
     }
-    (void)HAL_ADC_Stop(motorAdc);
   }
 
-  return value;
+  return (validSamples == 0U) ? 0U : (uint16_t)(sum / validSamples);
 }
 
 void Motor_Init(TIM_HandleTypeDef *pwmTimer,
@@ -177,6 +186,25 @@ void Motor_SpeedToggle(void)
   __HAL_TIM_SET_COMPARE(motorPwmTimer, TIM_CHANNEL_1, speedPwmDuty);
 }
 
+void Motor_SetPidGains(float kp, float ki)
+{
+  speedKp = kp;
+  speedKi = ki;
+  speedIntegral = 0.0f;
+}
+
+void Motor_SetKp(float kp)
+{
+  speedKp = kp;
+  speedIntegral = 0.0f;
+}
+
+void Motor_SetKi(float ki)
+{
+  speedKi = ki;
+  speedIntegral = 0.0f;
+}
+
 uint8_t Motor_MainLoopUpdate(void)
 {
   uint32_t now = HAL_GetTick();
@@ -257,7 +285,7 @@ void Motor_TIM6_Update(void)
         speedIntegral = -MOTOR_PI_INTEGRAL_LIMIT;
       }
 
-      output = (MOTOR_PI_KP * error) + (MOTOR_PI_KI * speedIntegral);
+      output = (speedKp * error) + (speedKi * speedIntegral);
       if (output < (float)MOTOR_MIN_PWM)
       {
         output = (float)MOTOR_MIN_PWM;
@@ -298,7 +326,7 @@ void Motor_GetSpeedData(MotorSpeedData *data)
   data->rpm = speedRpm;
   data->pwmEnabled = speedPwmEnabled;
   data->pwmDuty = speedPwmDuty;
-  data->kp100 = (uint16_t)(MOTOR_PI_KP * 100.0f + 0.5f);
-  data->ki100 = (uint16_t)(MOTOR_PI_KI * 100.0f + 0.5f);
+  data->kp100 = (uint16_t)(speedKp * 100.0f + 0.5f);
+  data->ki100 = (uint16_t)(speedKi * 100.0f + 0.5f);
   __enable_irq();
 }

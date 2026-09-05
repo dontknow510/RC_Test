@@ -8,6 +8,7 @@
 #include "key.h"
 #include "menu.h"
 #include "motor.h"
+#include "vofa.h"
 
 void SystemClock_Config(void);
 
@@ -29,6 +30,7 @@ int main(void)
   OLED_Init();
   Motor_Init(&htim9, &htim4, &hadc1);
   Menu_Init();
+  VOFA_Init(&huart1);
 
   if (HAL_TIM_Base_Start_IT(&htim6) != HAL_OK)
   {
@@ -43,6 +45,7 @@ int main(void)
     KEY_Scan();
     Menu_HandleKeyEvents();
     Menu_MainLoopUpdate();
+    VOFA_MainLoopUpdate();
 
     if (Menu_IsRenderPending())
     {

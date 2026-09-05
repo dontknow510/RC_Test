@@ -46,6 +46,7 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/App/menu.c
     ${CMAKE_CURRENT_SOURCE_DIR}/App/motor.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/App/vofa.c
     # BSP drivers
     ${CMAKE_CURRENT_SOURCE_DIR}/BSP/OLED/OLED.c
     ${CMAKE_CURRENT_SOURCE_DIR}/BSP/OLED/font.c
