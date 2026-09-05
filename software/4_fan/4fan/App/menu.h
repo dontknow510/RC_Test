@@ -7,8 +7,7 @@ typedef enum
 {
   MENU_PAGE_MAIN = 0,
   MENU_PAGE_SPEED,
-  MENU_PAGE_POSITION,
-  MENU_PAGE_DEVELOPMENT
+  MENU_PAGE_POSITION
 } MenuPage;
 
 void Menu_Init(void);

@@ -3,8 +3,8 @@
 
 #define MOTOR_ENCODER_CPR             1456L
 #define MOTOR_MAX_TARGET_RPM          300U
-#define MOTOR_PI_KP                   2.2f
-#define MOTOR_PI_KI                   1.3f
+#define MOTOR_PI_KP                   1.2f
+#define MOTOR_PI_KI                   2.7f
 #define MOTOR_PI_INTEGRAL_LIMIT       1000.0f
 #define MOTOR_MIN_PWM                 10U
 #define MOTOR_ADC_AVERAGE_SAMPLES     16U
@@ -13,16 +13,6 @@ static TIM_HandleTypeDef *motorPwmTimer;
 static TIM_HandleTypeDef *motorEncoderTimer;
 static ADC_HandleTypeDef *motorAdc;
 static MotorMode motorMode = MOTOR_MODE_IDLE;
-
-static volatile int32_t devTotalCount;
-static volatile uint16_t devPreviousCount;
-static volatile int16_t devDeltaCount;
-static volatile uint8_t devDirection;
-static volatile int32_t devRpm;
-static volatile int32_t devSpeedCount;
-static volatile uint8_t devSpeedSamples;
-static volatile uint8_t devPwmEnabled;
-static volatile uint8_t devPwmDuty;
 
 static volatile uint16_t speedPreviousCount;
 static volatile int32_t speedRpm;
@@ -39,13 +29,6 @@ static uint32_t adcLastUpdateTick;
 static void Motor_ResetEncoderState(void)
 {
   __HAL_TIM_SET_COUNTER(motorEncoderTimer, 0U);
-  devTotalCount = 0;
-  devPreviousCount = 0U;
-  devDeltaCount = 0;
-  devDirection = 0U;
-  devRpm = 0;
-  devSpeedCount = 0;
-  devSpeedSamples = 0U;
   speedPreviousCount = 0U;
   speedRpm = 0;
   speedSpeedCount = 0;
@@ -116,12 +99,6 @@ void Motor_SetMode(MotorMode mode)
     speedPwmDuty = 0U;
     speedIntegral = 0.0f;
   }
-  else
-  {
-    devPwmEnabled = 0U;
-    devPwmDuty = 0U;
-  }
-
   __HAL_TIM_SET_COMPARE(motorPwmTimer, TIM_CHANNEL_1, 0U);
   adcLastUpdateTick = HAL_GetTick();
 }
@@ -138,37 +115,10 @@ void Motor_Stop(void)
     (void)HAL_TIM_Encoder_Stop(motorEncoderTimer, TIM_CHANNEL_ALL);
   }
   HAL_GPIO_WritePin(GPIOE, GPIO_PIN_2 | GPIO_PIN_4, GPIO_PIN_RESET);
-  devPwmEnabled = 0U;
-  devPwmDuty = 0U;
   speedPwmEnabled = 0U;
   speedPwmDuty = 0U;
   speedIntegral = 0.0f;
   motorMode = MOTOR_MODE_IDLE;
-}
-
-void Motor_DevelopmentIncreaseDuty(void)
-{
-  devPwmDuty = (devPwmDuty >= 95U) ? 100U : (uint8_t)(devPwmDuty + 5U);
-  if (devPwmEnabled != 0U)
-  {
-    __HAL_TIM_SET_COMPARE(motorPwmTimer, TIM_CHANNEL_1, devPwmDuty);
-  }
-}
-
-void Motor_DevelopmentDecreaseDuty(void)
-{
-  devPwmDuty = (devPwmDuty <= 5U) ? 0U : (uint8_t)(devPwmDuty - 5U);
-  if (devPwmEnabled != 0U)
-  {
-    __HAL_TIM_SET_COMPARE(motorPwmTimer, TIM_CHANNEL_1, devPwmDuty);
-  }
-}
-
-void Motor_DevelopmentToggle(void)
-{
-  devPwmEnabled = (devPwmEnabled == 0U) ? 1U : 0U;
-  __HAL_TIM_SET_COMPARE(motorPwmTimer, TIM_CHANNEL_1,
-                        devPwmEnabled ? devPwmDuty : 0U);
 }
 
 void Motor_SpeedToggle(void)
@@ -235,26 +185,7 @@ uint8_t Motor_MainLoopUpdate(void)
 
 void Motor_TIM6_Update(void)
 {
-  if (motorMode == MOTOR_MODE_DEVELOPMENT)
-  {
-    uint16_t currentCount = (uint16_t)__HAL_TIM_GET_COUNTER(motorEncoderTimer);
-    int16_t delta = -(int16_t)(currentCount - devPreviousCount);
-    devPreviousCount = currentCount;
-    devDeltaCount = delta;
-    devTotalCount += delta;
-    devSpeedCount += delta;
-    devSpeedSamples++;
-
-    if (devSpeedSamples >= 10U)
-    {
-      devRpm = (devSpeedCount * 600L) / MOTOR_ENCODER_CPR;
-      devSpeedCount = 0;
-      devSpeedSamples = 0U;
-    }
-
-    devDirection = (delta > 0) ? 1U : (delta < 0) ? 2U : 0U;
-  }
-  else if (motorMode == MOTOR_MODE_SPEED)
+  if (motorMode == MOTOR_MODE_SPEED)
   {
     uint16_t currentCount = (uint16_t)__HAL_TIM_GET_COUNTER(motorEncoderTimer);
     int16_t delta = -(int16_t)(currentCount - speedPreviousCount);
@@ -305,18 +236,6 @@ void Motor_TIM6_Update(void)
       speedSpeedSamples = 0U;
     }
   }
-}
-
-void Motor_GetDevelopmentData(MotorDevelopmentData *data)
-{
-  __disable_irq();
-  data->totalCount = devTotalCount;
-  data->deltaCount = devDeltaCount;
-  data->rpm = devRpm;
-  data->direction = devDirection;
-  data->pwmEnabled = devPwmEnabled;
-  data->pwmDuty = devPwmDuty;
-  __enable_irq();
 }
 
 void Motor_GetSpeedData(MotorSpeedData *data)

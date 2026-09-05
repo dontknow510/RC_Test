@@ -6,19 +6,8 @@
 typedef enum
 {
   MOTOR_MODE_IDLE = 0,
-  MOTOR_MODE_SPEED,
-  MOTOR_MODE_DEVELOPMENT
+  MOTOR_MODE_SPEED
 } MotorMode;
-
-typedef struct
-{
-  int32_t totalCount;
-  int16_t deltaCount;
-  int32_t rpm;
-  uint8_t direction;
-  uint8_t pwmEnabled;
-  uint8_t pwmDuty;
-} MotorDevelopmentData;
 
 typedef struct
 {
@@ -35,16 +24,12 @@ void Motor_Init(TIM_HandleTypeDef *pwmTimer,
                 ADC_HandleTypeDef *adc);
 void Motor_SetMode(MotorMode mode);
 void Motor_Stop(void);
-void Motor_DevelopmentIncreaseDuty(void);
-void Motor_DevelopmentDecreaseDuty(void);
-void Motor_DevelopmentToggle(void);
 void Motor_SpeedToggle(void);
 void Motor_SetPidGains(float kp, float ki);
 void Motor_SetKp(float kp);
 void Motor_SetKi(float ki);
 uint8_t Motor_MainLoopUpdate(void);
 void Motor_TIM6_Update(void);
-void Motor_GetDevelopmentData(MotorDevelopmentData *data);
 void Motor_GetSpeedData(MotorSpeedData *data);
 
 #endif
