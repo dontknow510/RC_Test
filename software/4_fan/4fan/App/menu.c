@@ -45,6 +45,10 @@ static void Menu_EnterPage(MenuPage page)
   {
     Motor_SetMode(MOTOR_MODE_SPEED);
   }
+  else if (page == MENU_PAGE_POSITION)
+  {
+    Motor_SetMode(MOTOR_MODE_POSITION);
+  }
   Menu_RequestRender();
 }
 
@@ -84,6 +88,11 @@ void Menu_HandleKeyEvents(void)
     Motor_SpeedToggle();
     Menu_RequestRender();
   }
+  else if (menuPage == MENU_PAGE_POSITION && key3 == KEY_EVENT_PRESSED)
+  {
+    Motor_PositionToggle();
+    Menu_RequestRender();
+  }
 
   if (key4 == KEY_EVENT_PRESSED && menuPage != MENU_PAGE_MAIN)
   {
@@ -103,6 +112,7 @@ void Menu_Render(void)
 {
   char line[24];
   MotorSpeedData speed;
+  MotorPositionData position;
 
   OLED_NewFrame();
 
@@ -132,13 +142,21 @@ void Menu_Render(void)
   }
   else if (menuPage == MENU_PAGE_POSITION)
   {
-    OLED_PrintString(32U, 0U, menuPositionText, &font16x16, OLED_COLOR_NORMAL);
-    OLED_PrintASCIIString(48U, 32U, "TEST", &afont16x8, OLED_COLOR_NORMAL);
-  }
-  else
-  {
-    OLED_PrintString(32U, 0U, menuPositionText, &font16x16, OLED_COLOR_NORMAL);
-    OLED_PrintASCIIString(48U, 32U, "TEST", &afont16x8, OLED_COLOR_NORMAL);
+    Motor_GetPositionData(&position);
+    (void)snprintf(line, sizeof(line), "TGT:%3u %s",
+                   (unsigned int)position.targetAngle,
+                   position.pwmEnabled != 0U ? "RUN" : "STOP");
+    OLED_PrintASCIIString(0U, 0U, line, &afont12x6, OLED_COLOR_NORMAL);
+    (void)snprintf(line, sizeof(line), "PosKp:%u.%02u",
+                   (unsigned int)(position.positionKp100 / 100U),
+                   (unsigned int)(position.positionKp100 % 100U));
+    OLED_PrintASCIIString(0U, 16U, line, &afont12x6, OLED_COLOR_NORMAL);
+    (void)snprintf(line, sizeof(line), "ANG:%+5ld",
+                   (long)position.positionAngle);
+    OLED_PrintASCIIString(0U, 32U, line, &afont12x6, OLED_COLOR_NORMAL);
+    (void)snprintf(line, sizeof(line), "ERR:%+6ld",
+                   (long)position.errorCount);
+    OLED_PrintASCIIString(0U, 48U, line, &afont12x6, OLED_COLOR_NORMAL);
   }
 
   OLED_ShowFrame();
