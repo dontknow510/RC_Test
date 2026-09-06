@@ -18,11 +18,6 @@ void Menu_Init(void)
   menuRenderPending = 1U;
 }
 
-MenuPage Menu_GetPage(void)
-{
-  return menuPage;
-}
-
 void Menu_RequestRender(void)
 {
   menuRenderPending = 1U;

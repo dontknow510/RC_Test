@@ -1,294 +1,281 @@
-#include "main.h"
 #include "OLED.h"
 #include "i2c.h"
-#include "string.h"
-#include "math.h"
-#include "stdlib.h"
+#include <string.h>
+#include <stdlib.h>
 
+#define OLED_ADDRESS       0x78U
+#define OLED_I2C_TIMEOUT   100U
+#define OLED_I2C_HANDLE    hi2c2
+#define OLED_PAGE          8U
+#define OLED_ROW           (OLED_PAGE * 8U)
+#define OLED_COLUMN        128U
 
-//宏定义从机地址SSD1306；
-#define OLED_ADDRESS 0x78
-#define OLED_I2C_TIMEOUT 100U
-#define OLED_I2C_HANDLE hi2c2
-// OLED参数
-#define OLED_PAGE 		8         // OLED页数
-#define OLED_ROW 			8 * 8 		// OLED行数
-#define OLED_COLUMN 	128       // OLED列数
+uint8_t OLED_GRAM[OLED_PAGE][OLED_COLUMN];
 
-uint8_t OLED_GRAM[OLED_PAGE][OLED_COLUMN];			//全屏清理显存 8*128
-
-void OLED_Send(uint8_t *data, uint8_t len)
+void OLED_Send(uint8_t *data, uint8_t length)
 {
-  HAL_I2C_Master_Transmit(&OLED_I2C_HANDLE, OLED_ADDRESS, data, len, OLED_I2C_TIMEOUT);
+  (void)HAL_I2C_Master_Transmit(&OLED_I2C_HANDLE, OLED_ADDRESS, data,
+                                length, OLED_I2C_TIMEOUT);
 }
 
-//向OLED发送指令
-void OLED_SendCmd(uint8_t cmd)
+void OLED_SendCmd(uint8_t command)
 {
-  static uint8_t sendBuffer[2] = {0};
-  sendBuffer[1] = cmd;
-  OLED_Send(sendBuffer, 2);
+  static uint8_t buffer[2];
+
+  buffer[1] = command;
+  OLED_Send(buffer, sizeof(buffer));
 }
-//清空显存；
+
 void OLED_NewFrame(void)
 {
   memset(OLED_GRAM, 0, sizeof(OLED_GRAM));
 }
 
-//OELD屏幕全屏显示显存；
-void OLED_ShowFrame()
+void OLED_ShowFrame(void)
 {
-	static uint8_t sendBuffer[129];		//全屏控制发送信息（发送开头+控制亮灭信息）
-	sendBuffer[0] = 0x40;
-	for(uint8_t i = 0; i < 8 ;i++)
-	{
-		OLED_SendCmd(0xB0 + i); // 设置页地址
-		OLED_SendCmd(0x00);     // 设置列地址低4位
-		OLED_SendCmd(0x10);     // 设置列地址高4位
-		memcpy(sendBuffer + 1, OLED_GRAM[i], OLED_COLUMN);
-		OLED_Send(sendBuffer, sizeof(sendBuffer));
-	}
+  static uint8_t buffer[OLED_COLUMN + 1U];
 
+  buffer[0] = 0x40U;
+  for (uint8_t page = 0U; page < OLED_PAGE; page++)
+  {
+    OLED_SendCmd((uint8_t)(0xB0U + page));
+    OLED_SendCmd(0x00U);
+    OLED_SendCmd(0x10U);
+    memcpy(&buffer[1], OLED_GRAM[page], OLED_COLUMN);
+    OLED_Send(buffer, sizeof(buffer));
+  }
 }
-//OLED初始化
+
 void OLED_Init(void)
 {
-OLED_SendCmd(0xAE); /*关闭显示 display off*/
+  static const uint8_t initCommands[] =
+  {
+    0xAEU, 0x20U, 0x02U, 0xB0U, 0xC8U, 0x00U, 0x10U, 0x40U,
+    0x81U, 0xDFU, 0xA1U, 0xA6U, 0xA8U, 0x3FU, 0xA4U, 0xD3U,
+    0x00U, 0xD5U, 0xF0U, 0xD9U, 0x22U, 0xDAU, 0x12U, 0xDBU,
+    0x20U, 0x8DU, 0x14U
+  };
 
-  OLED_SendCmd(0x20);
-  OLED_SendCmd(0x02);
+  for (uint8_t i = 0U; i < sizeof(initCommands); i++)
+  {
+    OLED_SendCmd(initCommands[i]);
+  }
 
-  OLED_SendCmd(0xB0);
-
-  OLED_SendCmd(0xC8);
-
-  OLED_SendCmd(0x00);
-  OLED_SendCmd(0x10);
-
-  OLED_SendCmd(0x40);
-
-  OLED_SendCmd(0x81);
-
-  OLED_SendCmd(0xDF);
-  OLED_SendCmd(0xA1);
-
-  OLED_SendCmd(0xA6);
-  OLED_SendCmd(0xA8);
-
-  OLED_SendCmd(0x3F);
-
-  OLED_SendCmd(0xA4);
-
-  OLED_SendCmd(0xD3);
-  OLED_SendCmd(0x00);
-
-  OLED_SendCmd(0xD5);
-  OLED_SendCmd(0xF0);
-
-  OLED_SendCmd(0xD9);
-  OLED_SendCmd(0x22);
-
-  OLED_SendCmd(0xDA);
-  OLED_SendCmd(0x12);
-
-  OLED_SendCmd(0xDB);
-  OLED_SendCmd(0x20);
-
-  OLED_SendCmd(0x8D);
-  OLED_SendCmd(0x14);
-
-	OLED_NewFrame();
+  OLED_NewFrame();
   OLED_ShowFrame();
-  
-	OLED_SendCmd(0xAF); /*开启显示 display ON*/
-}
-//开启OLED屏幕；
-void OLED_DisPlay_On()
-{
-  OLED_SendCmd(0x8D); // 电荷泵使能
-  OLED_SendCmd(0x14); // 开启电荷泵
-  OLED_SendCmd(0xAF); // 点亮屏幕
+  OLED_SendCmd(0xAFU);
 }
 
-//关闭OLED显示
-void OLED_DisPlay_Off()
+void OLED_DisPlay_On(void)
 {
-  OLED_SendCmd(0x8D); // 电荷泵使能
-  OLED_SendCmd(0x10); // 关闭电荷泵
-  OLED_SendCmd(0xAE); // 关闭屏幕
+  OLED_SendCmd(0x8DU);
+  OLED_SendCmd(0x14U);
+  OLED_SendCmd(0xAFU);
 }
 
-//设置一个像素点在显存上
+void OLED_DisPlay_Off(void)
+{
+  OLED_SendCmd(0x8DU);
+  OLED_SendCmd(0x10U);
+  OLED_SendCmd(0xAEU);
+}
+
 void OLED_SetPixel(uint8_t x, uint8_t y, OLED_ColorMode color)
 {
-  if (x >= OLED_COLUMN || y >= OLED_ROW)return;//防止越界；
-  if (!color)
+  if (x >= OLED_COLUMN || y >= OLED_ROW)
   {
-    OLED_GRAM[y / 8][x] |= 1 << (y % 8);//阳码;
+    return;
+  }
+
+  if (color == OLED_COLOR_NORMAL)
+  {
+    OLED_GRAM[y / 8U][x] |= (uint8_t)(1U << (y % 8U));
   }
   else
   {
-    OLED_GRAM[y / 8][x] &= ~(1 << (y % 8));//阴码;
+    OLED_GRAM[y / 8U][x] &= (uint8_t)~(1U << (y % 8U));
   }
 }
 
-
-
-// ========================== 显存字节函数 ==========================
-/**
- * @brief 设置显存中一字节数据的某几位
- * @param page 页地址
- * @param column 列地址
- * @param data 数据
- * @param start 起始位
- * @param end 结束位
- * @param color 颜色
- * @note 此函数将显存中的某一字节的第start位到第end位设置为与data相同
- * @note start和end的范围为0-7, start必须小于等于end
- * @note 此函数与OLED_SetByte_Fine的区别在于此函数只能设置显存中的某一真实字节
- */
-void OLED_SetByte_Fine(uint8_t page, uint8_t column, uint8_t data, uint8_t start, uint8_t end, OLED_ColorMode color)
+void OLED_SetByte_Fine(uint8_t page, uint8_t column, uint8_t data,
+                       uint8_t start, uint8_t end, OLED_ColorMode color)
 {
-  static uint8_t temp;
+  uint8_t mask;
+
   if (page >= OLED_PAGE || column >= OLED_COLUMN)
-    return;
-  if (color)
-    data = ~data;
-
-  temp = data | (0xff << (end + 1)) | (0xff >> (8 - start));
-  OLED_GRAM[page][column] &= temp;
-  temp = data & ~(0xff << (end + 1)) & ~(0xff >> (8 - start));
-  OLED_GRAM[page][column] |= temp;
-	//使用OLED_SetPixel实现
-	for (uint8_t i = start; i <= end; i++) 
-	{
-		OLED_SetPixel(column, page * 8 + i, !((data >> i) & 0x01));
-	}
-}
-
-/**
- * @brief 设置显存中的一字节数据
- * @param page 页地址
- * @param column 列地址
- * @param data 数据
- * @param color 颜色
- * @note 此函数将显存中的某一字节设置为data的值
- */
-void OLED_SetByte(uint8_t page, uint8_t column, uint8_t data, OLED_ColorMode color)
-{
-  if (page >= OLED_PAGE || column >= OLED_COLUMN)
-    return;
-  if (color)
-    data = ~data;
-  OLED_GRAM[page][column] = data;
-}
-
-/**
- * @brief 设置显存中的一字节数据的某几位
- * @param x 横坐标
- * @param y 纵坐标
- * @param data 数据
- * @param len 位数
- * @param color 颜色
- * @note 此函数将显存中从(x,y)开始向下数len位设置为与data相同
- * @note len的范围为1-8
- * @note 此函数与OLED_SetByte_Fine的区别在于此函数的横坐标和纵坐标是以像素为单位的, 可能出现跨两个真实字节的情况(跨页)
- */
-void OLED_SetBits_Fine(uint8_t x, uint8_t y, uint8_t data, uint8_t len, OLED_ColorMode color)
-{
-  uint8_t page = y / 8;
-  uint8_t bit = y % 8;
-  if (bit + len > 8)
   {
-    OLED_SetByte_Fine(page, x, data << bit, bit, 7, color);
-    OLED_SetByte_Fine(page + 1, x, data >> (8 - bit), 0, len + bit - 1 - 8, color);
+    return;
+  }
+
+  mask = (uint8_t)(((0xFFU >> (7U - (end - start))) << start) & 0xFFU);
+  if (color != OLED_COLOR_NORMAL)
+  {
+    data = (uint8_t)~data;
+  }
+  OLED_GRAM[page][column] = (uint8_t)((OLED_GRAM[page][column] & ~mask) |
+                                      (data & mask));
+}
+
+void OLED_SetByte(uint8_t page, uint8_t column, uint8_t data,
+                  OLED_ColorMode color)
+{
+  if (page >= OLED_PAGE || column >= OLED_COLUMN)
+  {
+    return;
+  }
+
+  OLED_GRAM[page][column] = color == OLED_COLOR_NORMAL ? data : (uint8_t)~data;
+}
+
+void OLED_SetBits_Fine(uint8_t x, uint8_t y, uint8_t data, uint8_t length,
+                       OLED_ColorMode color)
+{
+  uint8_t page = y / 8U;
+  uint8_t bit = y % 8U;
+
+  if (bit + length > 8U)
+  {
+    OLED_SetByte_Fine(page, x, (uint8_t)(data << bit), bit, 7U, color);
+    OLED_SetByte_Fine(page + 1U, x, (uint8_t)(data >> (8U - bit)), 0U,
+                      (uint8_t)(length + bit - 9U), color);
   }
   else
   {
-    OLED_SetByte_Fine(page, x, data << bit, bit, bit + len - 1, color);
+    OLED_SetByte_Fine(page, x, (uint8_t)(data << bit), bit,
+                      (uint8_t)(bit + length - 1U), color);
   }
-  // 使用OLED_SetPixel实现
-  for (uint8_t i = 0; i < len; i++) 
-	{
-		OLED_SetPixel(x, y + i, !((data >> i) & 0x01));
+
+  // 保留旧接口在反色模式下的逐像素覆盖行为。
+  for (uint8_t i = 0U; i < length; i++)
+  {
+    OLED_SetPixel(x, (uint8_t)(y + i), !((data >> i) & 0x01U));
   }
 }
 
-
-/**
- * @brief 设置显存中一字节长度的数据
- * @param x 横坐标
- * @param y 纵坐标
- * @param data 数据
- * @param color 颜色
- * @note 此函数将显存中从(x,y)开始向下数8位设置为与data相同
- * @note 此函数与OLED_SetByte的区别在于此函数的横坐标和纵坐标是以像素为单位的, 可能出现跨两个真实字节的情况(跨页)
- */
 void OLED_SetBits(uint8_t x, uint8_t y, uint8_t data, OLED_ColorMode color)
 {
-  uint8_t page = y / 8;
-  uint8_t bit = y % 8;
-  OLED_SetByte_Fine(page, x, data << bit, bit, 7, color);
-  if (bit)
+  uint8_t page = y / 8U;
+  uint8_t bit = y % 8U;
+
+  OLED_SetByte_Fine(page, x, (uint8_t)(data << bit), bit, 7U, color);
+  if (bit != 0U)
   {
-    OLED_SetByte_Fine(page + 1, x, data >> (8 - bit), 0, bit - 1, color);
+    OLED_SetByte_Fine(page + 1U, x, (uint8_t)(data >> (8U - bit)), 0U,
+                      (uint8_t)(bit - 1U), color);
   }
 }
 
-/**
- * @brief 设置一块显存区域
- * @param x 起始横坐标
- * @param y 起始纵坐标
- * @param data 数据的起始地址
- * @param w 宽度
- * @param h 高度
- * @param color 颜色
- * @note 此函数将显存中从(x,y)开始的w*h个像素设置为data中的数据
- * @note data的数据应该采用列行式排列
- */
-void OLED_SetBlock(uint8_t x, uint8_t y, const uint8_t *data, uint8_t w, uint8_t h, OLED_ColorMode color)
+void OLED_SetBlock(uint8_t x, uint8_t y, const uint8_t *data,
+                   uint8_t width, uint8_t height, OLED_ColorMode color)
 {
-  uint8_t fullRow = h / 8; // 完整的行数
-  uint8_t partBit = h % 8; // 不完整的字节中的有效位数
-  for (uint8_t i = 0; i < w; i++)
+  uint8_t fullRows = height / 8U;
+  uint8_t remainingBits = height % 8U;
+
+  for (uint8_t column = 0U; column < width; column++)
   {
-    for (uint8_t j = 0; j < fullRow; j++)
+    for (uint8_t row = 0U; row < fullRows; row++)
     {
-      OLED_SetBits(x + i, y + j * 8, data[i + j * w], color);
+      OLED_SetBits(x + column, (uint8_t)(y + row * 8U),
+                   data[column + row * width], color);
     }
   }
-  if (partBit)
+
+  if (remainingBits != 0U)
   {
-    uint16_t fullNum = w * fullRow; // 完整的字节数
-    for (uint8_t i = 0; i < w; i++)
+    uint16_t fullBytes = (uint16_t)width * fullRows;
+    for (uint8_t column = 0U; column < width; column++)
     {
-      OLED_SetBits_Fine(x + i, y + (fullRow * 8), data[fullNum + i], partBit, color);
+      OLED_SetBits_Fine(x + column, (uint8_t)(y + fullRows * 8U),
+                        data[fullBytes + column], remainingBits, color);
     }
   }
-  // 使用OLED_SetPixel实现
-  // for (uint8_t i = 0; i < w; i++) {
-  //   for (uint8_t j = 0; j < h; j++) {
-  //     for (uint8_t k = 0; k < 8; k++) {
-  //       if (j * 8 + k >= h) break; // 防止越界(不完整的字节
-  //       OLED_SetPixel(x + i, y + j * 8 + k, !((data[i + j * w] >> k) & 0x01));
-  //     }
-  //   }
-  // }
 }
 
-// ========================== 图形绘制函数 ==========================
-/**
- * @brief 绘制一条线段
- * @param x1 起始点横坐标
- * @param y1 起始点纵坐标
- * @param x2 终止点横坐标
- * @param y2 终止点纵坐标
- * @param color 颜色
- * @note 此函数使用Bresenham算法绘制线段
- */
-void OLED_DrawLine(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, OLED_ColorMode color)
+void OLED_PrintASCIIChar(uint8_t x, uint8_t y, char character,
+                         const ASCIIFont *font, OLED_ColorMode color)
 {
-  static uint8_t temp = 0;
+  uint16_t charSize = (uint16_t)((font->h + 7U) / 8U) * font->w;
+
+  OLED_SetBlock(x, y, font->chars + (character - ' ') * charSize,
+                font->w, font->h, color);
+}
+
+void OLED_PrintASCIIString(uint8_t x, uint8_t y, char *string,
+                           const ASCIIFont *font, OLED_ColorMode color)
+{
+  while (*string != '\0')
+  {
+    OLED_PrintASCIIChar(x, y, *string++, font, color);
+    x = (uint8_t)(x + font->w);
+  }
+}
+
+uint8_t _OLED_GetUTF8Len(char *string)
+{
+  if ((string[0] & 0x80) == 0x00)
+  {
+    return 1U;
+  }
+  if ((string[0] & 0xE0) == 0xC0)
+  {
+    return 2U;
+  }
+  if ((string[0] & 0xF0) == 0xE0)
+  {
+    return 3U;
+  }
+  if ((string[0] & 0xF8) == 0xF0)
+  {
+    return 4U;
+  }
+  return 0U;
+}
+
+void OLED_PrintString(uint8_t x, uint8_t y, char *string,
+                      const Font *font, OLED_ColorMode color)
+{
+  uint16_t index = 0U;
+  uint8_t glyphSize = (uint8_t)(((font->h + 7U) / 8U) * font->w + 4U);
+
+  while (string[index] != '\0')
+  {
+    uint8_t utf8Length = _OLED_GetUTF8Len(&string[index]);
+    uint8_t found = 0U;
+
+    if (utf8Length == 0U)
+    {
+      break;
+    }
+
+    for (uint8_t glyph = 0U; glyph < font->len; glyph++)
+    {
+      const uint8_t *head = font->chars + glyph * glyphSize;
+      if (memcmp(&string[index], head, utf8Length) == 0)
+      {
+        OLED_SetBlock(x, y, head + 4U, font->w, font->h, color);
+        x = (uint8_t)(x + font->w);
+        index = (uint16_t)(index + utf8Length);
+        found = 1U;
+        break;
+      }
+    }
+
+    if (found == 0U)
+    {
+      OLED_PrintASCIIChar(x, y,
+                          utf8Length == 1U ? string[index] : ' ',
+                          font->ascii, color);
+      x = (uint8_t)(x + font->ascii->w);
+      index = (uint16_t)(index + utf8Length);
+    }
+  }
+}
+
+void OLED_DrawLine(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2,
+                   OLED_ColorMode color)
+{
+  static uint8_t temp;
+
   if (x1 == x2)
   {
     if (y1 > y2)
@@ -317,12 +304,14 @@ void OLED_DrawLine(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, OLED_ColorMod
   }
   else
   {
-    // Bresenham直线算法
     int16_t dx = x2 - x1;
     int16_t dy = y2 - y1;
     int16_t ux = ((dx > 0) << 1) - 1;
     int16_t uy = ((dy > 0) << 1) - 1;
-    int16_t x = x1, y = y1, eps = 0;
+    int16_t x = x1;
+    int16_t y = y1;
+    int16_t error = 0;
+
     dx = abs(dx);
     dy = abs(dy);
     if (dx > dy)
@@ -330,11 +319,11 @@ void OLED_DrawLine(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, OLED_ColorMod
       for (x = x1; x != x2; x += ux)
       {
         OLED_SetPixel(x, y, color);
-        eps += dy;
-        if ((eps << 1) >= dx)
+        error += dy;
+        if ((error << 1) >= dx)
         {
           y += uy;
-          eps -= dx;
+          error -= dx;
         }
       }
     }
@@ -343,79 +332,51 @@ void OLED_DrawLine(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, OLED_ColorMod
       for (y = y1; y != y2; y += uy)
       {
         OLED_SetPixel(x, y, color);
-        eps += dx;
-        if ((eps << 1) >= dy)
+        error += dx;
+        if ((error << 1) >= dy)
         {
           x += ux;
-          eps -= dy;
+          error -= dy;
         }
       }
     }
   }
 }
 
-/**
- * @brief 绘制一个矩形
- * @param x 起始点横坐标
- * @param y 起始点纵坐标
- * @param w 矩形宽度
- * @param h 矩形高度
- * @param color 颜色
- */
-void OLED_DrawRectangle(uint8_t x, uint8_t y, uint8_t w, uint8_t h, OLED_ColorMode color)
+void OLED_DrawRectangle(uint8_t x, uint8_t y, uint8_t width, uint8_t height,
+                        OLED_ColorMode color)
 {
-  OLED_DrawLine(x, y, x + w, y, color);
-  OLED_DrawLine(x, y + h, x + w, y + h, color);
-  OLED_DrawLine(x, y, x, y + h, color);
-  OLED_DrawLine(x + w, y, x + w, y + h, color);
+  OLED_DrawLine(x, y, x + width, y, color);
+  OLED_DrawLine(x, y + height, x + width, y + height, color);
+  OLED_DrawLine(x, y, x, y + height, color);
+  OLED_DrawLine(x + width, y, x + width, y + height, color);
 }
 
-/**
- * @brief 绘制一个填充矩形
- * @param x 起始点横坐标
- * @param y 起始点纵坐标
- * @param w 矩形宽度
- * @param h 矩形高度
- * @param color 颜色
- */
-void OLED_DrawFilledRectangle(uint8_t x, uint8_t y, uint8_t w, uint8_t h, OLED_ColorMode color)
+void OLED_DrawFilledRectangle(uint8_t x, uint8_t y, uint8_t width,
+                              uint8_t height, OLED_ColorMode color)
 {
-  for (uint8_t i = 0; i < h; i++)
+  for (uint8_t row = 0U; row < height; row++)
   {
-    OLED_DrawLine(x, y + i, x + w, y + i, color);
+    OLED_DrawLine(x, y + row, x + width, y + row, color);
   }
 }
 
-/**
- * @brief 绘制一个三角形
- * @param x1 第一个点横坐标
- * @param y1 第一个点纵坐标
- * @param x2 第二个点横坐标
- * @param y2 第二个点纵坐标
- * @param x3 第三个点横坐标
- * @param y3 第三个点纵坐标
- * @param color 颜色
- */
-void OLED_DrawTriangle(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, uint8_t x3, uint8_t y3, OLED_ColorMode color)
+void OLED_DrawTriangle(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2,
+                       uint8_t x3, uint8_t y3, OLED_ColorMode color)
 {
   OLED_DrawLine(x1, y1, x2, y2, color);
   OLED_DrawLine(x2, y2, x3, y3, color);
   OLED_DrawLine(x3, y3, x1, y1, color);
 }
 
-/**
- * @brief 绘制一个填充三角形
- * @param x1 第一个点横坐标
- * @param y1 第一个点纵坐标
- * @param x2 第二个点横坐标
- * @param y2 第二个点纵坐标
- * @param x3 第三个点横坐标
- * @param y3 第三个点纵坐标
- * @param color 颜色
- */
-void OLED_DrawFilledTriangle(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, uint8_t x3, uint8_t y3, OLED_ColorMode color)
+void OLED_DrawFilledTriangle(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2,
+                             uint8_t x3, uint8_t y3, OLED_ColorMode color)
 {
-  uint8_t a = 0, b = 0, y = 0, last = 0;
+  uint8_t a;
+  uint8_t b;
+  uint8_t y;
+  uint8_t last = 0U;
+
   if (y1 > y2)
   {
     a = y2;
@@ -426,36 +387,35 @@ void OLED_DrawFilledTriangle(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, uin
     a = y1;
     b = y2;
   }
+
   y = a;
   for (; y <= b; y++)
   {
     if (y <= y3)
     {
-      OLED_DrawLine(x1 + (y - y1) * (x2 - x1) / (y2 - y1), y, x1 + (y - y1) * (x3 - x1) / (y3 - y1), y, color);
+      OLED_DrawLine(x1 + (y - y1) * (x2 - x1) / (y2 - y1), y,
+                    x1 + (y - y1) * (x3 - x1) / (y3 - y1), y, color);
     }
     else
     {
-      last = y - 1;
+      last = y - 1U;
       break;
     }
   }
   for (; y <= b; y++)
   {
-    OLED_DrawLine(x2 + (y - y2) * (x3 - x2) / (y3 - y2), y, x1 + (y - last) * (x3 - x1) / (y3 - last), y, color);
+    OLED_DrawLine(x2 + (y - y2) * (x3 - x2) / (y3 - y2), y,
+                  x1 + (y - last) * (x3 - x1) / (y3 - last), y, color);
   }
 }
 
-/**
- * @brief 绘制一个圆
- * @param x 圆心横坐标
- * @param y 圆心纵坐标
- * @param r 圆半径
- * @param color 颜色
- * @note 此函数使用Bresenham算法绘制圆
- */
-void OLED_DrawCircle(uint8_t x, uint8_t y, uint8_t r, OLED_ColorMode color)
+void OLED_DrawCircle(uint8_t x, uint8_t y, uint8_t radius,
+                     OLED_ColorMode color)
 {
-  int16_t a = 0, b = r, di = 3 - (r << 1);
+  int16_t a = 0;
+  int16_t b = radius;
+  int16_t delta = 3 - (radius << 1);
+
   while (a <= b)
   {
     OLED_SetPixel(x - b, y - a, color);
@@ -468,30 +428,26 @@ void OLED_DrawCircle(uint8_t x, uint8_t y, uint8_t r, OLED_ColorMode color)
     OLED_SetPixel(x + a, y + b, color);
     OLED_SetPixel(x - b, y + a, color);
     a++;
-    if (di < 0)
+    if (delta < 0)
     {
-      di += 4 * a + 6;
+      delta += 4 * a + 6;
     }
     else
     {
-      di += 10 + 4 * (a - b);
+      delta += 10 + 4 * (a - b);
       b--;
     }
     OLED_SetPixel(x + a, y + b, color);
   }
 }
 
-/**
- * @brief 绘制一个填充圆
- * @param x 圆心横坐标
- * @param y 圆心纵坐标
- * @param r 圆半径
- * @param color 颜色
- * @note 此函数使用Bresenham算法绘制圆
- */
-void OLED_DrawFilledCircle(uint8_t x, uint8_t y, uint8_t r, OLED_ColorMode color)
+void OLED_DrawFilledCircle(uint8_t x, uint8_t y, uint8_t radius,
+                           OLED_ColorMode color)
 {
-  int16_t a = 0, b = r, di = 3 - (r << 1);
+  int16_t a = 0;
+  int16_t b = radius;
+  int16_t delta = 3 - (radius << 1);
+
   while (a <= b)
   {
     for (int16_t i = x - b; i <= x + b; i++)
@@ -505,209 +461,84 @@ void OLED_DrawFilledCircle(uint8_t x, uint8_t y, uint8_t r, OLED_ColorMode color
       OLED_SetPixel(i, y - b, color);
     }
     a++;
-    if (di < 0)
+    if (delta < 0)
     {
-      di += 4 * a + 6;
+      delta += 4 * a + 6;
     }
     else
     {
-      di += 10 + 4 * (a - b);
+      delta += 10 + 4 * (a - b);
       b--;
     }
   }
 }
 
-/**
- * @brief 绘制一个椭圆
- * @param x 椭圆中心横坐标
- * @param y 椭圆中心纵坐标
- * @param a 椭圆长轴
- * @param b 椭圆短轴
- */
-void OLED_DrawEllipse(uint8_t x, uint8_t y, uint8_t a, uint8_t b, OLED_ColorMode color)
+void OLED_DrawEllipse(uint8_t x, uint8_t y, uint8_t a, uint8_t b,
+                      OLED_ColorMode color)
 {
-  int xpos = 0, ypos = b;
-  int a2 = a * a, b2 = b * b;
-  int d = b2 + a2 * (0.25 - b);
+  int xpos = 0;
+  int ypos = b;
+  int a2 = a * a;
+  int b2 = b * b;
+  int delta = b2 + a2 * (0.25 - b);
+
   while (a2 * ypos > b2 * xpos)
   {
     OLED_SetPixel(x + xpos, y + ypos, color);
     OLED_SetPixel(x - xpos, y + ypos, color);
     OLED_SetPixel(x + xpos, y - ypos, color);
     OLED_SetPixel(x - xpos, y - ypos, color);
-    if (d < 0)
+    if (delta < 0)
     {
-      d = d + b2 * ((xpos << 1) + 3);
-      xpos += 1;
+      delta += b2 * ((xpos << 1) + 3);
+      xpos++;
     }
     else
     {
-      d = d + b2 * ((xpos << 1) + 3) + a2 * (-(ypos << 1) + 2);
-      xpos += 1, ypos -= 1;
+      delta += b2 * ((xpos << 1) + 3) + a2 * (-(ypos << 1) + 2);
+      xpos++;
+      ypos--;
     }
   }
-  d = b2 * (xpos + 0.5) * (xpos + 0.5) + a2 * (ypos - 1) * (ypos - 1) - a2 * b2;
+
+  delta = b2 * (xpos + 0.5) * (xpos + 0.5) +
+          a2 * (ypos - 1) * (ypos - 1) - a2 * b2;
   while (ypos > 0)
   {
     OLED_SetPixel(x + xpos, y + ypos, color);
     OLED_SetPixel(x - xpos, y + ypos, color);
     OLED_SetPixel(x + xpos, y - ypos, color);
     OLED_SetPixel(x - xpos, y - ypos, color);
-    if (d < 0)
+    if (delta < 0)
     {
-      d = d + b2 * ((xpos << 1) + 2) + a2 * (-(ypos << 1) + 3);
-      xpos += 1, ypos -= 1;
+      delta += b2 * ((xpos << 1) + 2) + a2 * (-(ypos << 1) + 3);
+      xpos++;
+      ypos--;
     }
     else
     {
-      d = d + a2 * (-(ypos << 1) + 3);
-      ypos -= 1;
+      delta += a2 * (-(ypos << 1) + 3);
+      ypos--;
     }
   }
 }
 
-// ================================ 图片绘制 ================================
-/**
- * @brief 绘制一张图片
- * @param x 起始点横坐标
- * @param y 起始点纵坐标
- * @param img 图片
- * @param color 颜色
- */
-void OLED_DrawImage(uint8_t x, uint8_t y, const Image *img, OLED_ColorMode color)
+void OLED_DrawImage(uint8_t x, uint8_t y, const Image *image,
+                    OLED_ColorMode color)
 {
-  OLED_SetBlock(x, y, img->data, img->w, img->h, color);
+  OLED_SetBlock(x, y, image->data, image->w, image->h, color);
 }
 
-
-// ================================ 文字绘制 ================================
-
-/**
- * @brief 绘制一个ASCII字符
- * @param x 起始点横坐标
- * @param y 起始点纵坐标
- * @param ch 字符
- * @param font 字体
- * @param color 颜色
- */
-void OLED_PrintASCIIChar(uint8_t x, uint8_t y, char ch, const ASCIIFont *font, OLED_ColorMode color)
-{
-  OLED_SetBlock(x, y, font->chars + (ch - ' ') * (((font->h + 7) / 8) * font->w), font->w, font->h, color);
-}
-
-/**
- * @brief 绘制一个ASCII字符串
- * @param x 起始点横坐标
- * @param y 起始点纵坐标
- * @param str 字符串
- * @param font 字体
- * @param color 颜色
- */
-void OLED_PrintASCIIString(uint8_t x, uint8_t y, char *str, const ASCIIFont *font, OLED_ColorMode color)
-{
-  uint8_t x0 = x;
-  while (*str)
-  {
-    OLED_PrintASCIIChar(x0, y, *str, font, color);
-    x0 += font->w;
-    str++;
-  }
-}
-
-/**
- * @brief 获取UTF-8编码的字符长度
- */
-uint8_t _OLED_GetUTF8Len(char *string)
-{
-  if ((string[0] & 0x80) == 0x00)
-  {
-    return 1;
-  }
-  else if ((string[0] & 0xE0) == 0xC0)
-  {
-    return 2;
-  }
-  else if ((string[0] & 0xF0) == 0xE0)
-  {
-    return 3;
-  }
-  else if ((string[0] & 0xF8) == 0xF0)
-  {
-    return 4;
-  }
-  return 0;
-}
-
-/**
- * @brief 绘制字符串
- * @param x 起始点横坐标
- * @param y 起始点纵坐标
- * @param str 字符串
- * @param font 字体
- * @param color 颜色
- *
- * @note 为保证字符串中的中文会被自动识别并绘制, 需:
- * 1. 编译器字符集设置为UTF-8
- * 2. 使用波特律动LED取模工具生成字模(https://led.baud-dance.com)
-*/
-void OLED_PrintString(uint8_t x, uint8_t y, char *str, const Font *font, OLED_ColorMode color)
-{
-  uint16_t i = 0;                                       // 字符串索引
-  uint8_t oneLen = (((font->h + 7) / 8) * font->w) + 4; // 一个字模占多少字节
-  uint8_t found;                                        // 是否找到字模
-  uint8_t utf8Len;                                      // UTF-8编码长度
-  uint8_t *head;                                        // 字模头指针
-  while (str[i])
-  {
-    found = 0;
-    utf8Len = _OLED_GetUTF8Len(str + i);
-    if (utf8Len == 0)
-      break; // 有问题的UTF-8编码
-
-    // 寻找字符  TODO 优化查找算法, 二分查找或者hash
-    for (uint8_t j = 0; j < font->len; j++)
-    {
-      head = (uint8_t *)(font->chars) + (j * oneLen);
-      if (memcmp(str + i, head, utf8Len) == 0)
-      {
-        OLED_SetBlock(x, y, head + 4, font->w, font->h, color);
-        // 移动光标
-        x += font->w;
-        i += utf8Len;
-        found = 1;
-        break;
-      }
-    }
-
-    // 若未找到字模,且为ASCII字符, 则缺省显示ASCII字符
-    if (found == 0)
-    {
-      if (utf8Len == 1)
-      {
-        OLED_PrintASCIIChar(x, y, str[i], font->ascii, color);
-        // 移动光标
-        x += font->ascii->w;
-        i += utf8Len;
-      }
-      else
-      {
-        OLED_PrintASCIIChar(x, y, ' ', font->ascii, color);
-        x += font->ascii->w;
-        i += utf8Len;
-      }
-    }
-  }
-}
-
-
-//OLED测试
 void OLED_Test(void)
 {
-	OLED_SendCmd(0xB0);//页地址
-	OLED_SendCmd(0x10);//列地址高四位
-	OLED_SendCmd(0x00);//列地址低四位
-	
-	uint8_t Tx_msg[] = {0x40,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
-	HAL_I2C_Master_Transmit(&OLED_I2C_HANDLE, OLED_ADDRESS, Tx_msg, sizeof(Tx_msg), 10000);
-}
+  uint8_t txMessage[] = {
+    0x40U, 0xFFU, 0xFFU, 0xFFU, 0xFFU, 0xFFU, 0xFFU,
+    0xFFU, 0xFFU, 0xFFU, 0xFFU, 0xFFU, 0xFFU
+  };
 
+  OLED_SendCmd(0xB0U);
+  OLED_SendCmd(0x10U);
+  OLED_SendCmd(0x00U);
+  (void)HAL_I2C_Master_Transmit(&OLED_I2C_HANDLE, OLED_ADDRESS, txMessage,
+                                sizeof(txMessage), 10000U);
+}

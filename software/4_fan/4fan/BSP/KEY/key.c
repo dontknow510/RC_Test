@@ -140,13 +140,3 @@ KeyEvent KEY_GetEvent(KeyId key)
   keyRuntime[key].event = KEY_EVENT_NONE;
   return event;
 }
-
-uint8_t KEY_IsPressed(KeyId key)
-{
-  if (key >= KEY_ID_COUNT)
-  {
-    return 0U;
-  }
-
-  return keyRuntime[key].stablePressed;
-}

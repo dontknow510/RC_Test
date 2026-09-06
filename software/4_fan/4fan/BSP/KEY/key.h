@@ -23,6 +23,5 @@ typedef enum
 void KEY_Init(void);
 void KEY_Scan(void);
 KeyEvent KEY_GetEvent(KeyId key);
-uint8_t KEY_IsPressed(KeyId key);
 
 #endif /* BSP_KEY_H */

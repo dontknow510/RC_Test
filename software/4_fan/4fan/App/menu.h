@@ -17,6 +17,5 @@ void Menu_MainLoopUpdate(void);
 void Menu_RequestRender(void);
 uint8_t Menu_IsRenderPending(void);
 void Menu_ClearRenderPending(void);
-MenuPage Menu_GetPage(void);
 
 #endif
