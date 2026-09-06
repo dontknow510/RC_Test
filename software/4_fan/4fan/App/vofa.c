@@ -109,6 +109,16 @@ static void VOFA_ProcessTextLine(void)
     return;
   }
 
+  if (strncmp(vofaTextLine, "PosKd:", 6U) == 0)
+  {
+    if (VOFA_ParseFloat(&vofaTextLine[6], &value) &&
+        value >= 0.0f && value <= VOFA_GAIN_MAX)
+    {
+      Motor_SetPositionKd(value);
+    }
+    return;
+  }
+
   if (strncmp(vofaTextLine, "PosSpeedKp:", 11U) == 0)
   {
     if (VOFA_ParseFloat(&vofaTextLine[11], &value) &&

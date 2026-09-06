@@ -45,6 +45,7 @@ void Motor_SetPidGains(float kp, float ki);
 void Motor_SetKp(float kp);
 void Motor_SetKi(float ki);
 void Motor_SetPositionKp(float kp);
+void Motor_SetPositionKd(float kd);
 void Motor_SetPositionMaxRpm(uint16_t maxRpm);
 void Motor_SetPositionDeadband(int32_t deadbandCount);
 void Motor_SetPositionSpeedKp(float kp);

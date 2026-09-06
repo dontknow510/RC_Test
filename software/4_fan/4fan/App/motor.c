@@ -9,7 +9,8 @@
 #define MOTOR_MIN_PWM                 10U
 #define MOTOR_ADC_AVERAGE_SAMPLES     16U
 #define MOTOR_POSITION_MAX_TARGET_RPM 60
-#define MOTOR_POSITION_KP              0.12f
+#define MOTOR_POSITION_KP              1.3f
+#define MOTOR_POSITION_KD              0.60f
 #define MOTOR_POSITION_DEADBAND_COUNT 4L
 #define MOTOR_POSITION_MAX_RPM_LIMIT   300U
 #define MOTOR_POSITION_KP_MAX          100.0f
@@ -39,11 +40,13 @@ static volatile int16_t positionTargetRpm;
 static volatile uint8_t positionPwmEnabled;
 static volatile uint8_t positionPwmDuty;
 static volatile float positionKp = MOTOR_POSITION_KP;
+static volatile float positionKd = MOTOR_POSITION_KD;
 static volatile uint16_t positionMaxTargetRpm = MOTOR_POSITION_MAX_TARGET_RPM;
 static volatile int32_t positionDeadbandCount = MOTOR_POSITION_DEADBAND_COUNT;
 static volatile float positionSpeedIntegral;
 static volatile float positionSpeedKp = MOTOR_POSITION_PI_KP;
 static volatile float positionSpeedKi = MOTOR_POSITION_PI_KI;
+static volatile float positionActualRpmFiltered;
 static int8_t positionDirection;
 static uint32_t adcLastUpdateTick;
 
@@ -62,6 +65,7 @@ static void Motor_ResetEncoderState(void)
   positionPwmEnabled = 0U;
   positionPwmDuty = 0U;
   positionSpeedIntegral = 0.0f;
+  positionActualRpmFiltered = 0.0f;
   positionDirection = 0;
 }
 
@@ -234,6 +238,17 @@ void Motor_SetPositionKp(float kp)
   positionSpeedIntegral = 0.0f;
 }
 
+void Motor_SetPositionKd(float kd)
+{
+  if (!(kd >= 0.0f && kd <= MOTOR_POSITION_KP_MAX))
+  {
+    return;
+  }
+
+  positionKd = kd;
+  positionSpeedIntegral = 0.0f;
+}
+
 void Motor_SetPositionMaxRpm(uint16_t maxRpm)
 {
   if (maxRpm > MOTOR_POSITION_MAX_RPM_LIMIT)
@@ -390,6 +405,8 @@ void Motor_TIM6_Update(void)
 
     actualRpm = ((float)delta * 6000.0f) /
                 (float)MOTOR_ENCODER_CPR;
+    positionActualRpmFiltered +=
+        0.25f * (actualRpm - positionActualRpmFiltered);
     positionError = positionTargetCount - positionCount;
 
     if (positionPwmEnabled == 0U || positionKp <= 0.0f ||
@@ -406,7 +423,8 @@ void Motor_TIM6_Update(void)
       return;
     }
 
-    targetRpm = (float)positionError * positionKp;
+    targetRpm = ((float)positionError * positionKp) -
+                (positionActualRpmFiltered * positionKd);
     if (targetRpm > (float)positionMaxTargetRpm)
     {
       targetRpm = (float)positionMaxTargetRpm;
