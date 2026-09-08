@@ -50,6 +50,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     BSP/OLED/OLED.c
     BSP/OLED/font.c
     App/display.c
+    App/mpu6050_app.c
     App/scheduler.c
 )
 

@@ -1,6 +1,5 @@
 #include "display.h"
 #include "OLED.h"
-#include "key.h"
 #include <stdio.h>
 
 void Display_Init(void)
@@ -14,11 +13,12 @@ void Display_Init(void)
   OLED_ShowFrame();
 }
 
-void Display_Update(const ADC_InputData *data)
+void Display_Update(const ADC_InputData *data,
+                    const MPU6050_AppState *mpu_state)
 {
   char line[22];
 
-  if (data == NULL)
+  if ((data == NULL) || (mpu_state == NULL))
   {
     return;
   }
@@ -30,12 +30,18 @@ void Display_Update(const ADC_InputData *data)
                  (unsigned int)data->pitch_raw);
   OLED_PrintASCIIString(0U, 0U, line, &afont8x6, OLED_COLOR_NORMAL);
 
-  (void)snprintf(line, sizeof(line), "KEY:%u%u%u%u",
-                 (unsigned int)KEY_IsDown(KEY_ID_1),
-                 (unsigned int)KEY_IsDown(KEY_ID_2),
-                 (unsigned int)KEY_IsDown(KEY_ID_3),
-                 (unsigned int)KEY_IsDown(KEY_ID_4));
-  OLED_PrintASCIIString(0U, 16U, line, &afont8x6, OLED_COLOR_NORMAL);
+  if ((mpu_state->sample_valid != 0U) &&
+      (mpu_state->initialized != 0U))
+  {
+    (void)snprintf(line, sizeof(line), "R:%4d P:%4d",
+                   (int)mpu_state->roll_deg,
+                   (int)mpu_state->pitch_deg);
+    OLED_PrintASCIIString(0U, 16U, line, &afont8x6, OLED_COLOR_NORMAL);
+
+    (void)snprintf(line, sizeof(line), "Y:%6d",
+                   (int)mpu_state->yaw_deg);
+    OLED_PrintASCIIString(0U, 24U, line, &afont8x6, OLED_COLOR_NORMAL);
+  }
 
   OLED_ShowFrame();
 }

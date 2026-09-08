@@ -44,6 +44,10 @@ typedef struct
 } Kalman_t;
 
 HAL_StatusTypeDef MPU6050_Init(I2C_HandleTypeDef *I2Cx);
+uint8_t MPU6050_GetLastWhoAmI(void);
+void MPU6050_SetGyroBiasRaw(double bias_x, double bias_y, double bias_z);
+void MPU6050_SetGyroZDeadbandRaw(double deadband_raw);
+void MPU6050_ResetAttitude(MPU6050_t *DataStruct);
 
 HAL_StatusTypeDef MPU6050_ReadAccelYRaw(I2C_HandleTypeDef *I2Cx, int16_t *raw_y);
 
@@ -53,7 +57,8 @@ void MPU6050_Read_Gyro(I2C_HandleTypeDef *I2Cx, MPU6050_t *DataStruct);
 
 void MPU6050_Read_Temp(I2C_HandleTypeDef *I2Cx, MPU6050_t *DataStruct);
 
-void MPU6050_Read_All(I2C_HandleTypeDef *I2Cx, MPU6050_t *DataStruct);
+HAL_StatusTypeDef MPU6050_Read_All(I2C_HandleTypeDef *I2Cx,
+                                   MPU6050_t *DataStruct);
 
 double Kalman_getAngle(Kalman_t *Kalman, double newAngle, double newRate, double dt);
 

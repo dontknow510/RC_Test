@@ -16,13 +16,28 @@
 #define GYRO_CONFIG_REG 0x1B
 #define GYRO_XOUT_H_REG 0x43
 
+#define MPU6050_WHO_AM_I_VALUE 0x68U
+#define MPU6500_WHO_AM_I_VALUE 0x70U
+
 // Setup MPU6050
 
 #define MPU6050_ADDR 0xD0
 const uint16_t i2c_timeout = 100;
 const double Accel_Z_corrector = 14418.0;
 uint32_t timer;
-float yaw_angle = 0;
+static double yaw_angle;
+static uint8_t last_who_am_i;
+static double gyro_bias_x_raw;
+static double gyro_bias_y_raw;
+static double gyro_bias_z_raw;
+static double gyro_z_deadband_raw;
+
+static uint8_t MPU6050_IsSupportedWhoAmI(uint8_t who_am_i)
+{
+    return (who_am_i == MPU6050_WHO_AM_I_VALUE) ||
+           (who_am_i == MPU6500_WHO_AM_I_VALUE);
+}
+
 Kalman_t KalmanX = {
     .Q_angle = 0.001f,
     .Q_bias = 0.003f,
@@ -77,63 +92,137 @@ HAL_StatusTypeDef MPU6050_Init(I2C_HandleTypeDef *I2Cx)
 {
     uint8_t check;
     uint8_t data;
+    HAL_StatusTypeDef status;
+    uint8_t attempt;
 
+    last_who_am_i = 0U;
+    gyro_bias_x_raw = 0.0;
+    gyro_bias_y_raw = 0.0;
+    gyro_bias_z_raw = 0.0;
+    gyro_z_deadband_raw = 0.0;
+    yaw_angle = 0.0;
     if (I2Cx == NULL)
     {
         return HAL_ERROR;
     }
 
-    if (HAL_I2C_IsDeviceReady(I2Cx, MPU6050_ADDR, 2U, i2c_timeout) != HAL_OK)
+    /* Read WHO_AM_I several times so a slow-starting sensor is not rejected. */
+    status = HAL_ERROR;
+    for (attempt = 0U; attempt < 3U; attempt++)
     {
-        return HAL_ERROR;
+        check = 0U;
+        status = HAL_I2C_Mem_Read(I2Cx, MPU6050_ADDR, WHO_AM_I_REG,
+                                  I2C_MEMADD_SIZE_8BIT, &check, 1U,
+                                  i2c_timeout);
+        if (status == HAL_OK)
+        {
+            last_who_am_i = check;
+            /* 0x68 is MPU-6050; 0x70 is MPU-6500. */
+            if (MPU6050_IsSupportedWhoAmI(check) != 0U)
+            {
+                break;
+            }
+            status = HAL_ERROR;
+        }
+        HAL_Delay(5U);
     }
 
-    if (HAL_I2C_Mem_Read(I2Cx, MPU6050_ADDR, WHO_AM_I_REG,
-                         I2C_MEMADD_SIZE_8BIT, &check, 1U, i2c_timeout) != HAL_OK)
+    if ((status != HAL_OK) ||
+        (MPU6050_IsSupportedWhoAmI(last_who_am_i) == 0U))
     {
-        return HAL_ERROR;
-    }
-    if (check != 0x68U)
-    {
-        return HAL_ERROR;
+        return status;
     }
 
-    data = 0x01U;
-    if (HAL_I2C_Mem_Write(I2Cx, MPU6050_ADDR, PWR_MGMT_1_REG,
-                          I2C_MEMADD_SIZE_8BIT, &data, 1U, i2c_timeout) != HAL_OK)
-    {
-        return HAL_ERROR;
-    }
+    /* Match the tested reference project. Configuration writes are best effort. */
+    data = 0x00U;
+    (void)HAL_I2C_Mem_Write(I2Cx, MPU6050_ADDR, PWR_MGMT_1_REG,
+                            I2C_MEMADD_SIZE_8BIT, &data, 1U, i2c_timeout);
     HAL_Delay(10U);
 
-    data = 0x03U;
-    if (HAL_I2C_Mem_Write(I2Cx, MPU6050_ADDR, CONFIG_REG,
-                          I2C_MEMADD_SIZE_8BIT, &data, 1U, i2c_timeout) != HAL_OK)
-    {
-        return HAL_ERROR;
-    }
-
-    data = 0x09U;
-    if (HAL_I2C_Mem_Write(I2Cx, MPU6050_ADDR, SMPLRT_DIV_REG,
-                          I2C_MEMADD_SIZE_8BIT, &data, 1U, i2c_timeout) != HAL_OK)
-    {
-        return HAL_ERROR;
-    }
+    data = 0x07U;
+    (void)HAL_I2C_Mem_Write(I2Cx, MPU6050_ADDR, SMPLRT_DIV_REG,
+                            I2C_MEMADD_SIZE_8BIT, &data, 1U, i2c_timeout);
 
     data = 0x00U;
-    if (HAL_I2C_Mem_Write(I2Cx, MPU6050_ADDR, ACCEL_CONFIG_REG,
-                          I2C_MEMADD_SIZE_8BIT, &data, 1U, i2c_timeout) != HAL_OK)
-    {
-        return HAL_ERROR;
-    }
-    if (HAL_I2C_Mem_Write(I2Cx, MPU6050_ADDR, GYRO_CONFIG_REG,
-                          I2C_MEMADD_SIZE_8BIT, &data, 1U, i2c_timeout) != HAL_OK)
-    {
-        return HAL_ERROR;
-    }
+    (void)HAL_I2C_Mem_Write(I2Cx, MPU6050_ADDR, ACCEL_CONFIG_REG,
+                            I2C_MEMADD_SIZE_8BIT, &data, 1U, i2c_timeout);
+    (void)HAL_I2C_Mem_Write(I2Cx, MPU6050_ADDR, GYRO_CONFIG_REG,
+                            I2C_MEMADD_SIZE_8BIT, &data, 1U, i2c_timeout);
 
     timer = HAL_GetTick();
     return HAL_OK;
+}
+
+uint8_t MPU6050_GetLastWhoAmI(void)
+{
+    return last_who_am_i;
+}
+
+void MPU6050_SetGyroBiasRaw(double bias_x, double bias_y, double bias_z)
+{
+    gyro_bias_x_raw = bias_x;
+    gyro_bias_y_raw = bias_y;
+    gyro_bias_z_raw = bias_z;
+}
+
+void MPU6050_SetGyroZDeadbandRaw(double deadband_raw)
+{
+    gyro_z_deadband_raw = (deadband_raw > 0.0) ? deadband_raw : 0.0;
+}
+
+void MPU6050_ResetAttitude(MPU6050_t *DataStruct)
+{
+    double roll;
+    double pitch;
+    double roll_sqrt;
+
+    if (DataStruct == NULL)
+    {
+        return;
+    }
+
+    roll_sqrt = sqrt((double)DataStruct->Accel_X_RAW *
+                     (double)DataStruct->Accel_X_RAW +
+                     (double)DataStruct->Accel_Z_RAW *
+                     (double)DataStruct->Accel_Z_RAW);
+    if (roll_sqrt != 0.0)
+    {
+        roll = atan((double)DataStruct->Accel_Y_RAW / roll_sqrt) * RAD_TO_DEG;
+    }
+    else
+    {
+        roll = 0.0;
+    }
+
+    pitch = atan2(-(double)DataStruct->Accel_X_RAW,
+                  (double)DataStruct->Accel_Z_RAW) * RAD_TO_DEG;
+
+    KalmanX.angle = roll;
+    KalmanX.bias = 0.0;
+    KalmanX.P[0][0] = 0.0;
+    KalmanX.P[0][1] = 0.0;
+    KalmanX.P[1][0] = 0.0;
+    KalmanX.P[1][1] = 0.0;
+
+    KalmanY.angle = pitch;
+    KalmanY.bias = 0.0;
+    KalmanY.P[0][0] = 0.0;
+    KalmanY.P[0][1] = 0.0;
+    KalmanY.P[1][0] = 0.0;
+    KalmanY.P[1][1] = 0.0;
+
+    KalmanZ.angle = 0.0;
+    KalmanZ.bias = 0.0;
+    KalmanZ.P[0][0] = 0.0;
+    KalmanZ.P[0][1] = 0.0;
+    KalmanZ.P[1][0] = 0.0;
+    KalmanZ.P[1][1] = 0.0;
+
+    yaw_angle = 0.0f;
+    timer = HAL_GetTick();
+    DataStruct->KalmanAngleX = roll;
+    DataStruct->KalmanAngleY = pitch;
+    DataStruct->KalmanAngleZ = 0.0;
 }
 
 HAL_StatusTypeDef MPU6050_ReadAccelYRaw(I2C_HandleTypeDef *I2Cx, int16_t *raw_y)
@@ -229,12 +318,26 @@ double Kalman_getAngle(Kalman_t *Kalman, double newAngle, double newRate, double
     return Kalman->angle;
 }
 
-void MPU6050_Read_All(I2C_HandleTypeDef *I2Cx, MPU6050_t *DataStruct)
+HAL_StatusTypeDef MPU6050_Read_All(I2C_HandleTypeDef *I2Cx,
+                                   MPU6050_t *DataStruct)
 {
     uint8_t Rec_Data[14];
     int16_t temp;
+    double gyro_z_corrected_raw;
+    HAL_StatusTypeDef status;
 
-    HAL_I2C_Mem_Read(I2Cx, MPU6050_ADDR, ACCEL_XOUT_H_REG, 1, Rec_Data, 14, i2c_timeout);
+    if ((I2Cx == NULL) || (DataStruct == NULL))
+    {
+        return HAL_ERROR;
+    }
+
+    status = HAL_I2C_Mem_Read(I2Cx, MPU6050_ADDR, ACCEL_XOUT_H_REG,
+                              I2C_MEMADD_SIZE_8BIT, Rec_Data,
+                              sizeof(Rec_Data), i2c_timeout);
+    if (status != HAL_OK)
+    {
+        return status;
+    }
 
     DataStruct->Accel_X_RAW = (int16_t)(Rec_Data[0] << 8 | Rec_Data[1]);
     DataStruct->Accel_Y_RAW = (int16_t)(Rec_Data[2] << 8 | Rec_Data[3]);
@@ -248,16 +351,22 @@ void MPU6050_Read_All(I2C_HandleTypeDef *I2Cx, MPU6050_t *DataStruct)
     DataStruct->Ay = DataStruct->Accel_Y_RAW / 16384.0;
     DataStruct->Az = DataStruct->Accel_Z_RAW / Accel_Z_corrector;
     DataStruct->Temperature = (float)((int16_t)temp / (float)340.0 + (float)36.53);
-    DataStruct->Gx = DataStruct->Gyro_X_RAW / 131.0;
-    DataStruct->Gy = DataStruct->Gyro_Y_RAW / 131.0;
-    DataStruct->Gz = DataStruct->Gyro_Z_RAW / 131.0 - 4;
-
-		if(DataStruct->Gz > -1&&DataStruct->Gz < 1)
-			DataStruct->Gz = 0;
+    DataStruct->Gx = ((double)DataStruct->Gyro_X_RAW - gyro_bias_x_raw) / 131.0;
+    DataStruct->Gy = ((double)DataStruct->Gyro_Y_RAW - gyro_bias_y_raw) / 131.0;
+    gyro_z_corrected_raw =
+        (double)DataStruct->Gyro_Z_RAW - gyro_bias_z_raw;
+    DataStruct->Gz = gyro_z_corrected_raw / 131.0;
 
     // Kalman angle solve
-    double dt = (double)(HAL_GetTick() - timer) / 1000;
-    timer = HAL_GetTick();
+    uint32_t now = HAL_GetTick();
+    double dt = (double)(now - timer) / 1000.0;
+    double yaw_rate_dps = DataStruct->Gz;
+    timer = now;
+
+    if (fabs(gyro_z_corrected_raw) <= gyro_z_deadband_raw)
+    {
+        yaw_rate_dps = 0.0;
+    }
 		
     double roll;
     double roll_sqrt = sqrt(DataStruct->Accel_X_RAW * DataStruct->Accel_X_RAW + DataStruct->Accel_Z_RAW * DataStruct->Accel_Z_RAW);
@@ -281,6 +390,8 @@ void MPU6050_Read_All(I2C_HandleTypeDef *I2Cx, MPU6050_t *DataStruct)
 		// --- Yaw (Z杞?瑙掑害浼拌 ---
     // 娌℃湁纾佸姏璁℃棤娉曚粠鍔犻€熷害璁℃帹鏂璝aw瑙掞紝鍙兘闈犻檧铻轰华瑙掗€熷害绉垎
 		
-		yaw_angle += DataStruct->Gz * dt;  // 瑙掗€熷害绉垎锛坮ad/s 脳 s = rad锛?
+		yaw_angle += yaw_rate_dps * dt;
 		DataStruct->KalmanAngleZ = yaw_angle;
+
+    return HAL_OK;
 }

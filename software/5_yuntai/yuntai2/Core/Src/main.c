@@ -29,6 +29,7 @@
 #include "adc_input.h"
 #include "display.h"
 #include "key.h"
+#include "mpu6050_app.h"
 #include "scheduler.h"
 
 /* USER CODE END Includes */
@@ -101,10 +102,14 @@ int main(void)
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
   ADC_InputData adc_data = {0};
+  const MPU6050_AppState *mpu_state;
   uint32_t consumed_tick;
 
   KEY_Init();
+  /* Give the OLED module time to power up before sending init commands. */
+  HAL_Delay(100U);
   Display_Init();
+  (void)MPU6050_App_Init();
   if (Scheduler_Start() != HAL_OK)
   {
     Error_Handler();
@@ -117,17 +122,19 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    KEY_Scan();
-
     while (consumed_tick != Scheduler_GetTick())
     {
       consumed_tick++;
+      /* Scan keys at the scheduler rate so debounce timing is deterministic. */
+      KEY_Scan();
       (void)ADC_Input_Update();
+      (void)MPU6050_App_Update();
 
       if ((consumed_tick % 10U) == 0U)
       {
         ADC_Input_Get(&adc_data);
-        Display_Update(&adc_data);
+        mpu_state = MPU6050_App_GetState();
+        Display_Update(&adc_data, mpu_state);
       }
     }
     /* USER CODE END WHILE */
