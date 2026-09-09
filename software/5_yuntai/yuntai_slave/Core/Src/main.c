@@ -103,8 +103,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    Slave_Update();
-    HAL_Delay(10U);
+    /* 全部工作在 USART1 接收中断中完成 */
   }
   /* USER CODE END 3 */
 }

@@ -38,9 +38,6 @@
 /* 每个节拍目标脉宽最大变化量（us）：限制猛甩、保护舵机、平滑模式切换 */
 #define GIMBAL_SLEW_US_PER_TICK   50U
 
-/* 蓝牙发送周期（节拍数）：1 = 每 10 ms 一帧（100 Hz） */
-#define GIMBAL_BT_SEND_TICKS      1U
-
 typedef enum
 {
   GIMBAL_MODE_POTENTIOMETER = 0,
@@ -49,14 +46,9 @@ typedef enum
 
 void Gimbal_Init(void);
 
-/* 主循环每个 10 ms 节拍调用：处理按键、计算目标、驱动本地舵机、发送蓝牙帧。 */
-void Gimbal_Update(const ADC_InputData *adc, const MPU6050_AppState *mpu,
-                   uint32_t tick);
+/* 主循环每个 10 ms 节拍调用：处理按键、计算目标、驱动本地舵机、发送蓝牙帧 */
+void Gimbal_Update(const ADC_InputData *adc, const MPU6050_AppState *mpu);
 
 GimbalMode Gimbal_GetMode(void);
-uint16_t Gimbal_GetTargetUs(ServoChannel channel);
-
-/* 陀螺仪数据是否可用（初始化成功且当前帧有效） */
-uint8_t Gimbal_IsGyroAvailable(void);
 
 #endif /* YUNTAI_GIMBAL_APP_H */

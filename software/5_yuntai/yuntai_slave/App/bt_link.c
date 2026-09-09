@@ -15,55 +15,23 @@ static BtDecodeState g_decode_state;
 static uint8_t g_decode_buffer[BT_LINK_RX_BUF_LEN];
 static uint8_t g_decode_index;
 
-uint8_t BtLink_Crc8(const uint8_t *data, uint8_t length)
+static uint8_t BtLink_Crc8(const uint8_t *data, uint8_t length)
 {
   uint8_t crc = 0U;
   uint8_t i;
   uint8_t bit;
-
-  if (data == NULL)
-  {
-    return 0U;
-  }
 
   for (i = 0U; i < length; i++)
   {
     crc ^= data[i];
     for (bit = 0U; bit < 8U; bit++)
     {
-      if ((crc & 0x80U) != 0U)
-      {
-        crc = (uint8_t)((crc << 1) ^ 0x07U);
-      }
-      else
-      {
-        crc = (uint8_t)(crc << 1);
-      }
+      crc = ((crc & 0x80U) != 0U) ? (uint8_t)((crc << 1) ^ 0x07U)
+                                  : (uint8_t)(crc << 1);
     }
   }
 
   return crc;
-}
-
-uint8_t BtLink_Encode(const BtLinkFrame *frame, uint8_t *out, uint8_t out_size)
-{
-  if ((frame == NULL) || (out == NULL) || (out_size < BT_LINK_FRAME_LEN))
-  {
-    return 0U;
-  }
-
-  out[0] = BT_LINK_HEADER_0;
-  out[1] = BT_LINK_HEADER_1;
-  out[2] = BT_LINK_PAYLOAD_LEN;
-  out[3] = frame->seq;
-  out[4] = frame->mode;
-  out[5] = (uint8_t)(frame->ch1_us >> 8);
-  out[6] = (uint8_t)(frame->ch1_us & 0xFFU);
-  out[7] = (uint8_t)(frame->ch2_us >> 8);
-  out[8] = (uint8_t)(frame->ch2_us & 0xFFU);
-  out[9] = BtLink_Crc8(&out[2], BT_LINK_PAYLOAD_LEN + 1U);
-
-  return BT_LINK_FRAME_LEN;
 }
 
 void BtLink_DecodeReset(void)

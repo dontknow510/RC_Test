@@ -151,7 +151,7 @@ int main(void)
       mpu_state = MPU6050_App_GetState();
 
       /* Mode switch, target pulse, local servo output and Bluetooth frame. */
-      Gimbal_Update(&adc_data, mpu_state, consumed_tick);
+      Gimbal_Update(&adc_data, mpu_state);
 
       if ((consumed_tick % DISPLAY_REFRESH_TICKS) == 0U)
       {
