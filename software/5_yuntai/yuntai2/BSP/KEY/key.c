@@ -1,7 +1,6 @@
 #include "key.h"
 
 #define KEY_DEBOUNCE_TIME_MS 20U
-#define KEY_LONG_PRESS_TIME_MS 800U
 
 typedef enum
 {
@@ -21,9 +20,7 @@ typedef struct
 {
   KeyState state;
   uint8_t stable_pressed;
-  uint8_t long_press_reported;
   uint32_t state_tick;
-  uint32_t press_tick;
   KeyEvent event;
 } KeyRuntime;
 
@@ -52,9 +49,7 @@ void KEY_Init(void)
   {
     key_runtime[key].state = KEY_STATE_IDLE;
     key_runtime[key].stable_pressed = 0U;
-    key_runtime[key].long_press_reported = 0U;
     key_runtime[key].state_tick = now;
-    key_runtime[key].press_tick = now;
     key_runtime[key].event = KEY_EVENT_NONE;
   }
 }
@@ -88,8 +83,6 @@ void KEY_Scan(void)
         {
           runtime->state = KEY_STATE_PRESSED;
           runtime->stable_pressed = 1U;
-          runtime->press_tick = now;
-          runtime->long_press_reported = 0U;
           runtime->event = KEY_EVENT_PRESSED;
         }
         break;
@@ -99,13 +92,6 @@ void KEY_Scan(void)
         {
           runtime->state = KEY_STATE_DEBOUNCE_RELEASE;
           runtime->state_tick = now;
-        }
-        else if ((runtime->long_press_reported == 0U) &&
-                 ((uint32_t)(now - runtime->press_tick) >=
-                  KEY_LONG_PRESS_TIME_MS))
-        {
-          runtime->long_press_reported = 1U;
-          runtime->event = KEY_EVENT_LONG_PRESSED;
         }
         break;
 
@@ -126,7 +112,6 @@ void KEY_Scan(void)
       default:
         runtime->state = KEY_STATE_IDLE;
         runtime->stable_pressed = 0U;
-        runtime->long_press_reported = 0U;
         runtime->event = KEY_EVENT_NONE;
         break;
     }

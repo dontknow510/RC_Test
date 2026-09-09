@@ -49,9 +49,12 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     BSP/MPU6050/mpu6050.c
     BSP/OLED/OLED.c
     BSP/OLED/font.c
+    App/bt_link.c
     App/display.c
+    App/gimbal_app.c
     App/mpu6050_app.c
     App/scheduler.c
+    App/servo_app.c
 )
 
 # Add include paths

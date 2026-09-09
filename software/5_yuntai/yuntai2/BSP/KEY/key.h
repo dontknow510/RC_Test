@@ -16,8 +16,7 @@ typedef enum
 {
   KEY_EVENT_NONE = 0,
   KEY_EVENT_PRESSED,
-  KEY_EVENT_RELEASED,
-  KEY_EVENT_LONG_PRESSED
+  KEY_EVENT_RELEASED
 } KeyEvent;
 
 void KEY_Init(void);

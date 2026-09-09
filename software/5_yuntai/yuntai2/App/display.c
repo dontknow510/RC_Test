@@ -1,5 +1,7 @@
 #include "display.h"
 #include "OLED.h"
+#include "gimbal_app.h"
+#include "servo_app.h"
 #include <stdio.h>
 
 void Display_Init(void)
@@ -42,6 +44,12 @@ void Display_Update(const ADC_InputData *data,
                    (int)mpu_state->yaw_deg);
     OLED_PrintASCIIString(0U, 24U, line, &afont8x6, OLED_COLOR_NORMAL);
   }
+
+  (void)snprintf(line, sizeof(line), "%c S1:%4u S2:%4u",
+                 (Gimbal_GetMode() == GIMBAL_MODE_GYRO) ? 'G' : 'P',
+                 (unsigned int)Servo_GetPulseUs(SERVO_CHANNEL_HORIZONTAL),
+                 (unsigned int)Servo_GetPulseUs(SERVO_CHANNEL_PITCH));
+  OLED_PrintASCIIString(0U, 32U, line, &afont8x6, OLED_COLOR_NORMAL);
 
   OLED_ShowFrame();
 }

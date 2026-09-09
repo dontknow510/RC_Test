@@ -1,7 +1,7 @@
 #include "scheduler.h"
 #include "tim.h"
 
-volatile uint32_t g_10ms_tick;
+static volatile uint32_t g_10ms_tick;
 
 HAL_StatusTypeDef Scheduler_Start(void)
 {

@@ -27,10 +27,13 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "adc_input.h"
+#include "bt_link.h"
 #include "display.h"
+#include "gimbal_app.h"
 #include "key.h"
 #include "mpu6050_app.h"
 #include "scheduler.h"
+#include "servo_app.h"
 
 /* USER CODE END Includes */
 
@@ -41,7 +44,10 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+/* One full OLED frame costs about 24 ms on I2C2 @400 kHz, so refresh the
+   display every 20 scheduler ticks (200 ms) to keep the 10 ms control loop
+   free. Raise this value if the motion still stutters. */
+#define DISPLAY_REFRESH_TICKS 20U
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -100,6 +106,7 @@ int main(void)
   MX_I2C2_Init();
   MX_TIM6_Init();
   MX_USART3_UART_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
   ADC_InputData adc_data = {0};
   const MPU6050_AppState *mpu_state;
@@ -110,6 +117,14 @@ int main(void)
   HAL_Delay(100U);
   Display_Init();
   (void)MPU6050_App_Init();
+  /* Start TIM1 CH1/CH2 PWM only after the MPU calibration, so servo motion
+     cannot disturb the gyro bias measurement. */
+  if (Servo_Init() != HAL_OK)
+  {
+    Error_Handler();
+  }
+  BtLink_Init();
+  Gimbal_Init();
   if (Scheduler_Start() != HAL_OK)
   {
     Error_Handler();
@@ -130,10 +145,16 @@ int main(void)
       (void)ADC_Input_Update();
       (void)MPU6050_App_Update();
 
-      if ((consumed_tick % 10U) == 0U)
+      /* Fetch the latest sensor values every tick so the control loop runs
+         at a true 100 Hz regardless of the OLED refresh cost. */
+      ADC_Input_Get(&adc_data);
+      mpu_state = MPU6050_App_GetState();
+
+      /* Mode switch, target pulse, local servo output and Bluetooth frame. */
+      Gimbal_Update(&adc_data, mpu_state, consumed_tick);
+
+      if ((consumed_tick % DISPLAY_REFRESH_TICKS) == 0U)
       {
-        ADC_Input_Get(&adc_data);
-        mpu_state = MPU6050_App_GetState();
         Display_Update(&adc_data, mpu_state);
       }
     }
